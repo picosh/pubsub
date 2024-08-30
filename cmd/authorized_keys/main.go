@@ -27,7 +27,14 @@ type Subscriber struct {
 	ID      string
 	Channel string
 	Session ssh.Session
+	Chan    chan error
 }
+
+func (s *Subscriber) Wait() error {
+	err := <-s.Chan
+	return err
+}
+
 type Msg struct {
 	Channel string
 	Reader  io.Reader
@@ -55,7 +62,7 @@ func (b *BasicPubSub) Sub(sub *Subscriber) error {
 	id := uuid.New()
 	sub.ID = id.String()
 	b.subs = append(b.subs, sub)
-	return nil
+	return sub.Wait()
 }
 
 func (b *BasicPubSub) UnSub(rm *Subscriber) error {
@@ -71,7 +78,7 @@ func (b *BasicPubSub) UnSub(rm *Subscriber) error {
 }
 
 func (b *BasicPubSub) Pub(msg *Msg) []error {
-	b.logger.Info("sub", "channel", msg.Channel)
+	b.logger.Info("pub", "channel", msg.Channel)
 	errs := []error{}
 	for _, sub := range b.subs {
 		if sub.Channel != msg.Channel {
@@ -82,6 +89,8 @@ func (b *BasicPubSub) Pub(msg *Msg) []error {
 		if err != nil {
 			errs = append(errs, err)
 		}
+		sub.Chan <- err
+		b.UnSub(sub)
 	}
 	return errs
 }
@@ -110,17 +119,18 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 				listener := &Subscriber{
 					Channel: channel,
 					Session: sesh,
+					Chan:    make(chan error),
 				}
 				err := cfg.PubSub.Sub(listener)
 				if err != nil {
 					wish.Errorln(sesh, err)
 				}
-				defer func() {
+				/* defer func() {
 					err = cfg.PubSub.UnSub(listener)
 					if err != nil {
 						wish.Errorln(sesh, err)
 					}
-				}()
+				}() */
 			} else if cmd == "pub" {
 				msg := &Msg{
 					Channel: channel,
