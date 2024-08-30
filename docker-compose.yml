@@ -4,8 +4,6 @@ services:
       context: .
     image: ghcr.io/picosh/pubsub:latest
     restart: always
-    env_file:
-      - .env
     volumes:
       - ./ssh_data:/ssh_data
     ports:
