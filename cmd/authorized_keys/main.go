@@ -113,6 +113,12 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 	return func(next ssh.Handler) ssh.Handler {
 		return func(sesh ssh.Session) {
 			args := sesh.Command()
+			if len(args) < 2 {
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
+				next(sesh)
+				return
+			}
+
 			cmd := strings.TrimSpace(args[0])
 			channel := args[1]
 			logger := cfg.Logger.With(
@@ -147,6 +153,8 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 				}
 				err := cfg.PubSub.Pub(msg)
 				wish.Errorln(sesh, err)
+			} else {
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
 			}
 
 			next(sesh)
