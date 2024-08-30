@@ -25,7 +25,7 @@ func GetEnv(key string, defaultVal string) string {
 
 type Subscriber struct {
 	ID      string
-	Channel string
+	Name    string
 	Session ssh.Session
 	Chan    chan error
 }
@@ -36,8 +36,8 @@ func (s *Subscriber) Wait() error {
 }
 
 type Msg struct {
-	Channel string
-	Reader  io.Reader
+	Name   string
+	Reader io.Reader
 }
 
 type PubSub interface {
@@ -58,7 +58,7 @@ func (b *BasicPubSub) GetSubs() []*Subscriber {
 }
 
 func (b *BasicPubSub) Sub(sub *Subscriber) error {
-	b.logger.Info("sub", "channel", sub.Channel)
+	b.logger.Info("sub", "channel", sub.Name)
 	id := uuid.New()
 	sub.ID = id.String()
 	b.subs = append(b.subs, sub)
@@ -66,7 +66,7 @@ func (b *BasicPubSub) Sub(sub *Subscriber) error {
 }
 
 func (b *BasicPubSub) UnSub(rm *Subscriber) error {
-	b.logger.Info("unsub", "channel", rm.Channel)
+	b.logger.Info("unsub", "channel", rm.Name)
 	next := []*Subscriber{}
 	for _, sub := range b.subs {
 		if sub.ID != rm.ID {
@@ -78,10 +78,10 @@ func (b *BasicPubSub) UnSub(rm *Subscriber) error {
 }
 
 func (b *BasicPubSub) Pub(msg *Msg) []error {
-	b.logger.Info("pub", "channel", msg.Channel)
+	b.logger.Info("pub", "channel", msg.Name)
 	errs := []error{}
 	for _, sub := range b.subs {
-		if sub.Channel != msg.Channel {
+		if sub.Name != msg.Name {
 			continue
 		}
 
@@ -117,7 +117,7 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
 			} else if cmd == "sub" {
 				listener := &Subscriber{
-					Channel: channel,
+					Name:    channel,
 					Session: sesh,
 					Chan:    make(chan error),
 				}
@@ -133,8 +133,8 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 				}() */
 			} else if cmd == "pub" {
 				msg := &Msg{
-					Channel: channel,
-					Reader:  sesh,
+					Name:   channel,
+					Reader: sesh,
 				}
 				errs := cfg.PubSub.Pub(msg)
 				if errs != nil {
