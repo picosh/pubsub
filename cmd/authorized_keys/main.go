@@ -44,29 +44,29 @@ type PubSub interface {
 	GetSubs() []*Subscriber
 	Sub(l *Subscriber) error
 	UnSub(l *Subscriber) error
-	Pub(msg *Msg) []error
+	Pub(msg *Msg) error
 }
 
-type BasicPubSub struct {
+type PubSubMulticast struct {
 	logger *slog.Logger
 	subs   []*Subscriber
 }
 
-func (b *BasicPubSub) GetSubs() []*Subscriber {
+func (b *PubSubMulticast) GetSubs() []*Subscriber {
 	b.logger.Info("getsubs")
 	return b.subs
 }
 
-func (b *BasicPubSub) Sub(sub *Subscriber) error {
-	b.logger.Info("sub", "channel", sub.Name)
+func (b *PubSubMulticast) Sub(sub *Subscriber) error {
 	id := uuid.New()
 	sub.ID = id.String()
+	b.logger.Info("sub", "channel", sub.Name, "id", id)
 	b.subs = append(b.subs, sub)
 	return sub.Wait()
 }
 
-func (b *BasicPubSub) UnSub(rm *Subscriber) error {
-	b.logger.Info("unsub", "channel", rm.Name)
+func (b *PubSubMulticast) UnSub(rm *Subscriber) error {
+	b.logger.Info("unsub", "channel", rm.Name, "id", rm.ID)
 	next := []*Subscriber{}
 	for _, sub := range b.subs {
 		if sub.ID != rm.ID {
@@ -77,22 +77,31 @@ func (b *BasicPubSub) UnSub(rm *Subscriber) error {
 	return nil
 }
 
-func (b *BasicPubSub) Pub(msg *Msg) []error {
-	b.logger.Info("pub", "channel", msg.Name)
-	errs := []error{}
-	for _, sub := range b.subs {
-		if sub.Name != msg.Name {
-			continue
-		}
+func (b *PubSubMulticast) Pub(msg *Msg) error {
+	log := b.logger.With("channel", msg.Name)
+	log.Info("pub")
 
-		_, err := io.Copy(sub.Session, msg.Reader)
-		if err != nil {
-			errs = append(errs, err)
+	matches := []*Subscriber{}
+	writers := []io.Writer{}
+	for _, sub := range b.subs {
+		if sub.Name == msg.Name {
+			matches = append(matches, sub)
+			writers = append(writers, sub.Session)
 		}
+	}
+
+	log.Info("copying data")
+	writer := io.MultiWriter(writers...)
+	_, err := io.Copy(writer, msg.Reader)
+	if err != nil {
+		log.Error("pub", "err", err)
+	}
+	for _, sub := range matches {
 		sub.Chan <- err
 		b.UnSub(sub)
 	}
-	return errs
+
+	return err
 }
 
 type Cfg struct {
@@ -116,12 +125,12 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 			if cmd == "help" {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
 			} else if cmd == "sub" {
-				listener := &Subscriber{
+				sub := &Subscriber{
 					Name:    channel,
 					Session: sesh,
 					Chan:    make(chan error),
 				}
-				err := cfg.PubSub.Sub(listener)
+				err := cfg.PubSub.Sub(sub)
 				if err != nil {
 					wish.Errorln(sesh, err)
 				}
@@ -136,12 +145,8 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 					Name:   channel,
 					Reader: sesh,
 				}
-				errs := cfg.PubSub.Pub(msg)
-				if errs != nil {
-					for _, err := range errs {
-						wish.Errorln(sesh, err)
-					}
-				}
+				err := cfg.PubSub.Pub(msg)
+				wish.Errorln(sesh, err)
 			}
 
 			next(sesh)
@@ -156,7 +161,7 @@ func main() {
 	keyPath := GetEnv("SSH_AUTHORIZED_KEYS", "./ssh_data/authorized_keys")
 	cfg := &Cfg{
 		Logger: logger,
-		PubSub: &BasicPubSub{logger: logger},
+		PubSub: &PubSubMulticast{logger: logger},
 	}
 
 	s, err := wish.NewServer(

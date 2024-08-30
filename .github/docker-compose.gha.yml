@@ -1,0 +1,7 @@
+services:
+  pubsub:
+    build:
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
