@@ -8,6 +8,5 @@ services:
       - .env
     volumes:
       - ./ssh_data:/ssh_data
-    restart: always
     ports:
       - 2222:2222
