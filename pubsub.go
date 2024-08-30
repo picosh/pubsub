@@ -143,7 +143,9 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 					Reader: sesh,
 				}
 				err := cfg.PubSub.Pub(msg)
-				wish.Errorln(sesh, err)
+				if err != nil {
+					wish.Errorln(sesh, err)
+				}
 			} else {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
 			}
