@@ -1,0 +1,5 @@
+*.swp
+.DS_Store
+*.log
+.env
+ssh_data/
