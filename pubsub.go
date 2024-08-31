@@ -23,8 +23,9 @@ func (s *Subscriber) Wait() error {
 }
 
 type Msg struct {
-	Name   string
-	Reader io.Reader
+	Name    string
+	Session ssh.Session
+	Reader  io.Reader
 }
 
 type PubSub interface {
@@ -145,8 +146,9 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 				}() */
 			} else if cmd == "pub" {
 				msg := &Msg{
-					Name:   channel,
-					Reader: sesh,
+					Name:    channel,
+					Session: sesh,
+					Reader:  sesh,
 				}
 				err := cfg.PubSub.Pub(msg)
 				if err != nil {
