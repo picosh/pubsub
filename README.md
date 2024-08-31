@@ -1,6 +1,10 @@
 # pubsub
 
-Pubsub over ssh.
+pubsub over ssh
+
+The simplest pubsub system for everyday automation needs.
+
+[![asciicast](https://asciinema.org/a/674287.svg)](https://asciinema.org/a/674287)
 
 ```bash
 # term 1

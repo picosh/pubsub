@@ -145,8 +145,8 @@ func PubSubMiddleware(cfg *Cfg) wish.Middleware {
 				}() */
 			} else if cmd == "pub" {
 				msg := &Msg{
-					Name:    channel,
-					Reader:  sesh,
+					Name:   channel,
+					Reader: sesh,
 				}
 				err := cfg.PubSub.Pub(msg)
 				if err != nil {
