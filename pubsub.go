@@ -32,6 +32,8 @@ type PubSub interface {
 	Sub(l *Subscriber) error
 	UnSub(l *Subscriber) error
 	Pub(msg *Msg) error
+	// return true if message should be sent to this subscriber
+	PubMatcher(msg *Msg, sub *Subscriber) bool
 }
 
 type PubSubMulticast struct {
@@ -64,6 +66,10 @@ func (b *PubSubMulticast) UnSub(rm *Subscriber) error {
 	return nil
 }
 
+func (b *PubSubMulticast) PubMatcher(msg *Msg, sub *Subscriber) bool {
+	return msg.Name == sub.Name
+}
+
 func (b *PubSubMulticast) Pub(msg *Msg) error {
 	log := b.Logger.With("channel", msg.Name)
 	log.Info("pub")
@@ -71,7 +77,7 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 	matches := []*Subscriber{}
 	writers := []io.Writer{}
 	for _, sub := range b.subs {
-		if sub.Name == msg.Name {
+		if b.PubMatcher(msg, sub) {
 			matches = append(matches, sub)
 			writers = append(writers, sub.Session)
 		}
