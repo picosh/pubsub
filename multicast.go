@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 
@@ -23,7 +24,13 @@ func (b *PubSubMulticast) Sub(sub *Subscriber) error {
 	sub.ID = id.String()
 	b.Logger.Info("sub", "channel", sub.Name, "id", id)
 	b.subs = append(b.subs, sub)
-	b.Chan <- sub
+	select {
+	case b.Chan <- sub:
+		// message sent
+	default:
+		// message dropped
+	}
+
 	return sub.Wait()
 }
 
@@ -62,10 +69,7 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 			log.Info("no subs found, waiting for sub")
 			sub = <-b.Chan
 			if b.PubMatcher(msg, sub) {
-				log.Info("sub found")
-				matches = append(matches, sub)
-				writers = append(writers, sub.Writer)
-				break
+				return b.Pub(msg)
 			}
 		}
 	}
@@ -76,8 +80,10 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 	if err != nil {
 		log.Error("pub", "err", err)
 	}
+	fmt.Println(len(matches))
 	for _, sub := range matches {
 		sub.Chan <- err
+		log.Info("sub unsub")
 		err = b.UnSub(sub)
 		if err != nil {
 			log.Error("unsub err", "err", err)
