@@ -52,7 +52,7 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 	for _, sub := range b.subs {
 		if b.PubMatcher(msg, sub) {
 			matches = append(matches, sub)
-			writers = append(writers, sub.Session)
+			writers = append(writers, sub.Writer)
 		}
 	}
 
@@ -64,7 +64,7 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 			if b.PubMatcher(msg, sub) {
 				log.Info("sub found")
 				matches = append(matches, sub)
-				writers = append(writers, sub.Session)
+				writers = append(writers, sub.Writer)
 				break
 			}
 		}

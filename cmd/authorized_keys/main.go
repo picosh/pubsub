@@ -45,9 +45,9 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
 			} else if cmd == "sub" {
 				sub := &pubsub.Subscriber{
-					Name:    channel,
-					Session: sesh,
-					Chan:    make(chan error),
+					Name:   channel,
+					Writer: sesh,
+					Chan:   make(chan error),
 				}
 				err := cfg.PubSub.Sub(sub)
 				if err != nil {

@@ -3,15 +3,13 @@ package pubsub
 import (
 	"io"
 	"log/slog"
-
-	"github.com/charmbracelet/ssh"
 )
 
 type Subscriber struct {
-	ID      string
-	Name    string
-	Session ssh.Session
-	Chan    chan error
+	ID     string
+	Name   string
+	Chan   chan error
+	Writer io.Writer
 }
 
 func (s *Subscriber) Wait() error {
