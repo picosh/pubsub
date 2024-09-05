@@ -78,7 +78,10 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 	}
 	for _, sub := range matches {
 		sub.Chan <- err
-		b.UnSub(sub)
+		err = b.UnSub(sub)
+		if err != nil {
+			log.Error("unsub err", "err", err)
+		}
 	}
 
 	return err
