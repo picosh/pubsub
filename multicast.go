@@ -1,7 +1,6 @@
 package pubsub
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 
@@ -90,7 +89,6 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 	if err != nil {
 		log.Error("pub", "err", err)
 	}
-	fmt.Println(len(matches))
 	for _, sub := range matches {
 		sub.Chan <- err
 		log.Info("sub unsub")

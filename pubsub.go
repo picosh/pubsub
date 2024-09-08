@@ -1,7 +1,6 @@
 package pubsub
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 )
@@ -14,7 +13,6 @@ type Subscriber struct {
 }
 
 func (s *Subscriber) Wait() error {
-	fmt.Println("wwww")
 	err := <-s.Chan
 	return err
 }
