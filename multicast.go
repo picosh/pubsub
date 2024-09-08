@@ -8,6 +8,16 @@ import (
 	"github.com/google/uuid"
 )
 
+/*
+multicast:
+
+	every pub event will be sent to all subs on a channel
+
+bidirectional blocking:
+
+	both pub and sub will wait for at least one
+	message on a channel before completing
+*/
 type PubSubMulticast struct {
 	Logger *slog.Logger
 	subs   []*Subscriber
