@@ -19,9 +19,9 @@ func (s *Subscriber) Wait() error {
 }
 
 type Msg struct {
-	Name      string
-	Reader    io.Reader
-	Delivered *time.Time
+	Name   string
+	Reader io.Reader
+	SentAt *time.Time
 }
 
 type PubSub interface {

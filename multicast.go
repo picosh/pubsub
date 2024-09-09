@@ -92,6 +92,9 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 	}
 
 	log.Info("copying data")
+	del := time.Now()
+	msg.SentAt = &del
+
 	writer := io.MultiWriter(writers...)
 	_, err := io.Copy(writer, msg.Reader)
 	if err != nil {
@@ -105,8 +108,6 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 			log.Error("unsub err", "err", err)
 		}
 	}
-	del := time.Now()
-	msg.Delivered = &del
 
 	return err
 }
@@ -115,7 +116,7 @@ func (b *PubSubMulticast) UnPub(msg *Msg) error {
 	b.Logger.Info("unpub", "channel", msg.Name)
 	// if the message hasn't been delivered then send a cancel sub to
 	// the multicast channel
-	if msg.Delivered == nil {
+	if msg.SentAt == nil {
 		b.Chan <- &Subscriber{Name: msg.Name}
 	}
 	return nil
