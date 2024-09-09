@@ -3,6 +3,7 @@ package pubsub
 import (
 	"io"
 	"log/slog"
+	"time"
 )
 
 type Subscriber struct {
@@ -18,15 +19,17 @@ func (s *Subscriber) Wait() error {
 }
 
 type Msg struct {
-	Name   string
-	Reader io.Reader
+	Name      string
+	Reader    io.Reader
+	Delivered *time.Time
 }
 
 type PubSub interface {
 	GetSubs() []*Subscriber
-	Sub(l *Subscriber) error
-	UnSub(l *Subscriber) error
+	Sub(sub *Subscriber) error
+	UnSub(sub *Subscriber) error
 	Pub(msg *Msg) error
+	UnPub(msg *Msg) error
 	// return true if message should be sent to this subscriber
 	PubMatcher(msg *Msg, sub *Subscriber) bool
 }

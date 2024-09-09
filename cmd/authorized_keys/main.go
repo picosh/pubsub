@@ -32,6 +32,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 				return
 			}
 
+			ctx := sesh.Context()
 			cmd := strings.TrimSpace(args[0])
 			channel := args[1]
 			logger := cfg.Logger.With(
@@ -49,6 +50,13 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					Writer: sesh,
 					Chan:   make(chan error),
 				}
+				go func() {
+					<-ctx.Done()
+					err := cfg.PubSub.UnSub(sub)
+					if err != nil {
+						wish.Errorln(sesh, err)
+					}
+				}()
 				err := cfg.PubSub.Sub(sub)
 				if err != nil {
 					wish.Errorln(sesh, err)
@@ -58,6 +66,13 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					Name:   channel,
 					Reader: sesh,
 				}
+				go func() {
+					<-ctx.Done()
+					err := cfg.PubSub.UnPub(msg)
+					if err != nil {
+						wish.Errorln(sesh, err)
+					}
+				}()
 				err := cfg.PubSub.Pub(msg)
 				if err != nil {
 					wish.Errorln(sesh, err)
@@ -88,7 +103,9 @@ func main() {
 		wish.WithAddress(fmt.Sprintf("%s:%s", host, port)),
 		wish.WithHostKeyPath("ssh_data/term_info_ed25519"),
 		wish.WithAuthorizedKeys(keyPath),
-		wish.WithMiddleware(PubSubMiddleware(cfg)),
+		wish.WithMiddleware(
+			PubSubMiddleware(cfg),
+		),
 	)
 	if err != nil {
 		logger.Error(err.Error())

@@ -1,8 +1,10 @@
 package pubsub
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -67,6 +69,7 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 	writers := []io.Writer{}
 	for _, sub := range b.subs {
 		if b.PubMatcher(msg, sub) {
+			log.Info("found match", "sub", sub.ID)
 			matches = append(matches, sub)
 			writers = append(writers, sub.Writer)
 		}
@@ -78,6 +81,11 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 			log.Info("no subs found, waiting for sub")
 			sub = <-b.Chan
 			if b.PubMatcher(msg, sub) {
+				// empty subscriber is a signal to force a pub to stop
+				// waiting for a sub
+				if sub.Writer == nil {
+					return fmt.Errorf("pub closed")
+				}
 				return b.Pub(msg)
 			}
 		}
@@ -97,6 +105,18 @@ func (b *PubSubMulticast) Pub(msg *Msg) error {
 			log.Error("unsub err", "err", err)
 		}
 	}
+	del := time.Now()
+	msg.Delivered = &del
 
 	return err
+}
+
+func (b *PubSubMulticast) UnPub(msg *Msg) error {
+	b.Logger.Info("unpub", "channel", msg.Name)
+	// if the message hasn't been delivered then send a cancel sub to
+	// the multicast channel
+	if msg.Delivered == nil {
+		b.Chan <- &Subscriber{Name: msg.Name}
+	}
+	return nil
 }
