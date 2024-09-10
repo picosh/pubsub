@@ -3,3 +3,4 @@
 *.log
 .env
 ssh_data/
+coverage.out
