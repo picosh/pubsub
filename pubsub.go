@@ -3,35 +3,132 @@ package pubsub
 import (
 	"io"
 	"log/slog"
+	"sync"
 	"time"
+
+	"github.com/antoniomika/syncmap"
 )
 
-type Subscriber struct {
+type Channel struct {
+	Name        string
+	Done        chan struct{}
+	Data        chan []byte
+	Subs        *syncmap.Map[string, *Sub]
+	Pubs        *syncmap.Map[string, *Pub]
+	once        sync.Once
+	cleanupOnce sync.Once
+	onceData    sync.Once
+}
+
+func (c *Channel) Cleanup() {
+	c.cleanupOnce.Do(func() {
+		close(c.Done)
+		c.onceData.Do(func() {
+			close(c.Data)
+		})
+	})
+}
+
+func (c *Channel) Handle() {
+	c.once.Do(func() {
+		go func() {
+			defer func() {
+				c.Subs.Range(func(I string, J *Sub) bool {
+					J.Cleanup()
+					return true
+				})
+
+				c.Pubs.Range(func(I string, J *Pub) bool {
+					J.Cleanup()
+					return true
+				})
+			}()
+
+		mainLoop:
+			for {
+				select {
+				case <-c.Done:
+					return
+				case data, ok := <-c.Data:
+					count := 0
+					for count == 0 {
+						c.Subs.Range(func(I string, J *Sub) bool {
+							count++
+							return true
+						})
+						if count == 0 {
+							select {
+							case <-time.After(1 * time.Millisecond):
+							case <-c.Done:
+								break mainLoop
+							}
+						}
+					}
+
+					c.Subs.Range(func(I string, J *Sub) bool {
+						if !ok {
+							J.onceData.Do(func() {
+								close(J.Data)
+							})
+							return true
+						}
+
+						select {
+						case J.Data <- data:
+							return true
+						case <-J.Done:
+							return true
+						case <-c.Done:
+							return true
+						case <-time.After(1 * time.Second):
+							slog.Error("timeout writing to sub", slog.Any("sub", I), slog.Any("channel", c.Name))
+							return true
+						}
+					})
+				}
+			}
+		}()
+	})
+}
+
+type Sub struct {
+	ID       string
+	Done     chan struct{}
+	Data     chan []byte
+	Writer   io.Writer
+	once     sync.Once
+	onceData sync.Once
+}
+
+func (sub *Sub) Cleanup() {
+	sub.once.Do(func() {
+		close(sub.Done)
+		sub.onceData.Do(func() {
+			close(sub.Data)
+		})
+	})
+}
+
+type Pub struct {
 	ID     string
-	Name   string
-	Chan   chan error
-	Writer io.Writer
-}
-
-func (s *Subscriber) Wait() error {
-	err := <-s.Chan
-	return err
-}
-
-type Msg struct {
-	Name   string
+	Done   chan struct{}
 	Reader io.Reader
-	SentAt *time.Time
+	once   sync.Once
+}
+
+func (pub *Pub) Cleanup() {
+	pub.once.Do(func() {
+		close(pub.Done)
+	})
 }
 
 type PubSub interface {
-	GetSubs() []*Subscriber
-	Sub(sub *Subscriber) error
-	UnSub(sub *Subscriber) error
-	Pub(msg *Msg) error
-	UnPub(msg *Msg) error
-	// return true if message should be sent to this subscriber
-	PubMatcher(msg *Msg, sub *Subscriber) bool
+	GetSubs(channel string) []*Sub
+	GetPubs(channel string) []*Pub
+	GetChannels() []*Channel
+	GetChannel(channel string) *Channel
+	Sub(channel string, sub *Sub) error
+	Pub(channel string, pub *Pub) error
 }
 
 type Cfg struct {

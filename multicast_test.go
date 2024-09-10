@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/antoniomika/syncmap"
 )
 
 func TestMulticastSubBlock(t *testing.T) {
@@ -17,32 +20,40 @@ func TestMulticastSubBlock(t *testing.T) {
 	syncer := make(chan int)
 
 	cast := &PubSubMulticast{
-		Logger: slog.Default(),
-		Chan:   make(chan *Subscriber),
+		Logger:   slog.Default(),
+		Channels: syncmap.New[string, *Channel](),
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	go func() {
-		sub := &Subscriber{
+		sub := &Sub{
 			ID:     "1",
-			Name:   name,
-			Chan:   make(chan error),
 			Writer: actual,
+			Done:   make(chan struct{}),
+			Data:   make(chan []byte),
 		}
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Sub(sub))
+		fmt.Println(cast.Sub(name, sub))
+		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		msg := &Msg{Name: name, Reader: strings.NewReader(expected)}
+		pub := &Pub{
+			ID:     "1",
+			Done:   make(chan struct{}),
+			Reader: strings.NewReader(expected),
+		}
 		orderActual += "pub-"
-		syncer <- 0
-		fmt.Println(cast.Pub(msg))
+		fmt.Println(cast.Pub(name, pub))
+		wg.Done()
 	}()
 
-	<-syncer
+	wg.Wait()
 
 	if orderActual != orderExpected {
 		t.Fatalf("\norderActual:(%s)\norderExpected:(%s)", orderActual, orderExpected)
@@ -61,32 +72,40 @@ func TestMulticastPubBlock(t *testing.T) {
 	syncer := make(chan int)
 
 	cast := &PubSubMulticast{
-		Logger: slog.Default(),
-		Chan:   make(chan *Subscriber),
+		Logger:   slog.Default(),
+		Channels: syncmap.New[string, *Channel](),
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	go func() {
-		msg := &Msg{Name: name, Reader: strings.NewReader(expected)}
+		pub := &Pub{
+			ID:     "1",
+			Done:   make(chan struct{}),
+			Reader: strings.NewReader(expected),
+		}
 		orderActual += "pub-"
 		syncer <- 0
-		fmt.Println(cast.Pub(msg))
+		fmt.Println(cast.Pub(name, pub))
+		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		sub := &Subscriber{
+		sub := &Sub{
 			ID:     "1",
-			Name:   name,
-			Chan:   make(chan error),
 			Writer: actual,
+			Done:   make(chan struct{}),
+			Data:   make(chan []byte),
 		}
 		orderActual += "sub-"
-		syncer <- 0
-		fmt.Println(cast.Sub(sub))
+		wg.Done()
+		fmt.Println(cast.Sub(name, sub))
 	}()
 
-	<-syncer
+	wg.Wait()
 
 	if orderActual != orderExpected {
 		t.Fatalf("\norderActual:(%s)\norderExpected:(%s)", orderActual, orderExpected)
@@ -106,46 +125,55 @@ func TestMulticastMultSubs(t *testing.T) {
 	syncer := make(chan int)
 
 	cast := &PubSubMulticast{
-		Logger: slog.Default(),
-		Chan:   make(chan *Subscriber),
+		Logger:   slog.Default(),
+		Channels: syncmap.New[string, *Channel](),
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(3)
+
 	go func() {
-		sub := &Subscriber{
+		sub := &Sub{
 			ID:     "1",
-			Name:   name,
-			Chan:   make(chan error),
 			Writer: actual,
+			Done:   make(chan struct{}),
+			Data:   make(chan []byte),
 		}
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Sub(sub))
+		fmt.Println(cast.Sub(name, sub))
+		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		sub := &Subscriber{
+		sub := &Sub{
 			ID:     "2",
-			Name:   name,
-			Chan:   make(chan error),
 			Writer: actualOther,
+			Done:   make(chan struct{}),
+			Data:   make(chan []byte),
 		}
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Sub(sub))
+		fmt.Println(cast.Sub(name, sub))
+		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		msg := &Msg{Name: name, Reader: strings.NewReader(expected)}
+		pub := &Pub{
+			ID:     "1",
+			Done:   make(chan struct{}),
+			Reader: strings.NewReader(expected),
+		}
 		orderActual += "pub-"
-		syncer <- 0
-		fmt.Println(cast.Pub(msg))
+		fmt.Println(cast.Pub(name, pub))
+		wg.Done()
 	}()
 
-	<-syncer
+	wg.Wait()
 
 	if orderActual != orderExpected {
 		t.Fatalf("\norderActual:(%s)\norderExpected:(%s)", orderActual, orderExpected)
