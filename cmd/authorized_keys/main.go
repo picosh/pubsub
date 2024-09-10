@@ -59,7 +59,10 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					sub.Cleanup()
 				}()
 
-				cfg.PubSub.Sub(channel, sub)
+				err := cfg.PubSub.Sub(channel, sub)
+				if err != nil {
+					logger.Error("error from sub", slog.Any("error", err), slog.String("sub", sub.ID))
+				}
 			} else if cmd == "pub" {
 				pub := &pubsub.Pub{
 					ID:     uuid.NewString(),
@@ -72,7 +75,10 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					pub.Cleanup()
 				}()
 
-				cfg.PubSub.Pub(channel, pub)
+				err := cfg.PubSub.Pub(channel, pub)
+				if err != nil {
+					logger.Error("error from pub", slog.Any("error", err), slog.String("pub", pub.ID))
+				}
 			} else {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
 			}
