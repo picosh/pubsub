@@ -1,7 +1,10 @@
 package pubsub
 
 import (
+	"errors"
+	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/antoniomika/syncmap"
 )
@@ -38,10 +41,13 @@ func (b *PubSubMulticast) Cleanup() {
 	}
 }
 
-func (b *PubSubMulticast) GetChannels() []*Channel {
+func (b *PubSubMulticast) GetChannels(channelPrefix string) []*Channel {
 	var chans []*Channel
 	b.Channels.Range(func(I string, J *Channel) bool {
-		chans = append(chans, J)
+		if strings.HasPrefix(I, channelPrefix) {
+			chans = append(chans, J)
+		}
+
 		return true
 	})
 	return chans
@@ -162,19 +168,22 @@ mainLoop:
 			data := make([]byte, 4096)
 			n, err := pub.Reader.Read(data)
 			data = data[:n]
-			if err != nil {
-				slog.Error("error reading from pub", slog.Any("pub", pub.ID), slog.Any("channel", channel), slog.Any("error", err))
-				return err
+
+			select {
+			case dataChannel.Data <- data:
+			case <-pub.Done:
+				break mainLoop
+			case <-dataChannel.Done:
+				break mainLoop
 			}
 
-			if n > 0 {
-				select {
-				case dataChannel.Data <- data:
-				case <-pub.Done:
-					break mainLoop
-				case <-dataChannel.Done:
-					break mainLoop
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
 				}
+
+				slog.Error("error reading from pub", slog.Any("pub", pub.ID), slog.Any("channel", channel), slog.Any("error", err))
+				return err
 			}
 		}
 	}

@@ -125,7 +125,7 @@ func (pub *Pub) Cleanup() {
 type PubSub interface {
 	GetSubs(channel string) []*Sub
 	GetPubs(channel string) []*Pub
-	GetChannels() []*Channel
+	GetChannels(channelPrefix string) []*Channel
 	GetChannel(channel string) *Channel
 	Sub(channel string, sub *Sub) error
 	Pub(channel string, pub *Pub) error

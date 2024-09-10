@@ -11,10 +11,31 @@ import (
 	"github.com/antoniomika/syncmap"
 )
 
+type Buffer struct {
+	b bytes.Buffer
+	m sync.Mutex
+}
+
+func (b *Buffer) Read(p []byte) (n int, err error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.Read(p)
+}
+func (b *Buffer) Write(p []byte) (n int, err error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.Write(p)
+}
+func (b *Buffer) String() string {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.String()
+}
+
 func TestMulticastSubBlock(t *testing.T) {
 	orderActual := ""
 	orderExpected := "sub-pub-"
-	actual := new(bytes.Buffer)
+	actual := new(Buffer)
 	expected := "some test data"
 	name := "test-channel"
 	syncer := make(chan int)
@@ -66,7 +87,7 @@ func TestMulticastSubBlock(t *testing.T) {
 func TestMulticastPubBlock(t *testing.T) {
 	orderActual := ""
 	orderExpected := "pub-sub-"
-	actual := new(bytes.Buffer)
+	actual := new(Buffer)
 	expected := "some test data"
 	name := "test-channel"
 	syncer := make(chan int)
@@ -118,8 +139,8 @@ func TestMulticastPubBlock(t *testing.T) {
 func TestMulticastMultSubs(t *testing.T) {
 	orderActual := ""
 	orderExpected := "sub-sub-pub-"
-	actual := new(bytes.Buffer)
-	actualOther := new(bytes.Buffer)
+	actual := new(Buffer)
+	actualOther := new(Buffer)
 	expected := "some test data"
 	name := "test-channel"
 	syncer := make(chan int)
