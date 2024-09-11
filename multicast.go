@@ -165,7 +165,7 @@ mainLoop:
 		case <-dataChannel.Done:
 			break mainLoop
 		default:
-			data := make([]byte, 4096)
+			data := make([]byte, 32*1024)
 			n, err := pub.Reader.Read(data)
 			data = data[:n]
 
