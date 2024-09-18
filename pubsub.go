@@ -13,6 +13,7 @@ type Channel struct {
 	Name        string
 	Done        chan struct{}
 	Data        chan []byte
+	Chan        chan *Sub
 	Subs        *syncmap.Map[string, *Sub]
 	Pubs        *syncmap.Map[string, *Pub]
 	once        sync.Once
@@ -95,6 +96,7 @@ type Sub struct {
 	ID       string
 	Done     chan struct{}
 	Data     chan []byte
+	Error    chan error
 	Writer   io.Writer
 	once     sync.Once
 	onceData sync.Once
@@ -109,11 +111,21 @@ func (sub *Sub) Cleanup() {
 	})
 }
 
+func (sub *Sub) Wait() error {
+	select {
+	case err := <-sub.Error:
+		return err
+	case <-sub.Done:
+		return nil
+	}
+}
+
 type Pub struct {
 	ID     string
 	Done   chan struct{}
 	Reader io.Reader
 	once   sync.Once
+	SentAt *time.Time
 }
 
 func (pub *Pub) Cleanup() {

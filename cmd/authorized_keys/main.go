@@ -29,13 +29,53 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 	return func(next ssh.Handler) ssh.Handler {
 		return func(sesh ssh.Session) {
 			args := sesh.Command()
-			if len(args) < 2 {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
+			if len(args) < 1 {
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (help|ls|pub|sub) {channel}")
 				next(sesh)
 				return
 			}
 
 			cmd := strings.TrimSpace(args[0])
+
+			if cmd == "help" {
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|ls) {channel}")
+				next(sesh)
+				return
+			} else if cmd == "ls" {
+				channels := cfg.PubSub.GetChannels("")
+
+				if len(channels) == 0 {
+					wish.Println(sesh, "no pubsub channels found")
+				} else {
+					outputData := "Channel Information\r\n"
+					for _, channel := range channels {
+						outputData += fmt.Sprintf("- %s:\r\n", channel.Name)
+						outputData += "\tPubs:\r\n"
+
+						channel.Pubs.Range(func(I string, J *pubsub.Pub) bool {
+							outputData += fmt.Sprintf("\t- %s:\r\n", I)
+							return true
+						})
+
+						outputData += "\tSubs:\r\n"
+
+						channel.Subs.Range(func(I string, J *pubsub.Sub) bool {
+							outputData += fmt.Sprintf("\t- %s:\r\n", I)
+							return true
+						})
+					}
+					_, _ = sesh.Write([]byte(outputData))
+				}
+				next(sesh)
+				return
+			}
+
+			if len(args) < 2 {
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (pub|sub) {channel}")
+				next(sesh)
+				return
+			}
+
 			channel := args[1]
 			logger := cfg.Logger.With(
 				"cmd", cmd,
@@ -44,9 +84,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 			logger.Info("running cli")
 
-			if cmd == "help" {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
-			} else if cmd == "sub" {
+			if cmd == "sub" {
 				sub := &pubsub.Sub{
 					ID:     uuid.NewString(),
 					Writer: sesh,

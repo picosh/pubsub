@@ -1,44 +1,41 @@
 package pubsub
 
 import (
-	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/antoniomika/syncmap"
 )
 
+/*
+multicast:
+
+	every pub event will be sent to all subs on a channel
+
+bidirectional blocking:
+
+	both pub and sub will wait for at least one
+	message on a channel before completing
+*/
 type PubSubMulticast struct {
 	Logger   *slog.Logger
 	Channels *syncmap.Map[string, *Channel]
 }
 
-func (b *PubSubMulticast) Cleanup() {
-	toRemove := []string{}
-	b.Channels.Range(func(I string, J *Channel) bool {
-		count := 0
-		J.Pubs.Range(func(K string, V *Pub) bool {
-			count++
-			return true
-		})
-
-		J.Subs.Range(func(K string, V *Sub) bool {
-			count++
-			return true
-		})
-
-		if count == 0 {
-			J.Cleanup()
-			toRemove = append(toRemove, I)
-		}
-
-		return true
+func (b *PubSubMulticast) ensure(channel string) *Channel {
+	dataChannel, _ := b.Channels.LoadOrStore(channel, &Channel{
+		Name: channel,
+		Done: make(chan struct{}),
+		Data: make(chan []byte),
+		Chan: make(chan *Sub),
+		Subs: syncmap.New[string, *Sub](),
+		Pubs: syncmap.New[string, *Pub](),
 	})
 
-	for _, channel := range toRemove {
-		b.Channels.Delete(channel)
-	}
+	return dataChannel
 }
 
 func (b *PubSubMulticast) GetChannels(channelPrefix string) []*Channel {
@@ -90,103 +87,79 @@ func (b *PubSubMulticast) GetSubs(channel string) []*Sub {
 	return subs
 }
 
-func (b *PubSubMulticast) ensure(channel string) *Channel {
-	dataChannel, _ := b.Channels.LoadOrStore(channel, &Channel{
-		Name: channel,
-		Done: make(chan struct{}),
-		Data: make(chan []byte),
-		Subs: syncmap.New[string, *Sub](),
-		Pubs: syncmap.New[string, *Pub](),
-	})
-	dataChannel.Handle()
-
-	return dataChannel
-}
-
 func (b *PubSubMulticast) Sub(channel string, sub *Sub) error {
-	dataChannel := b.ensure(channel)
-	dataChannel.Subs.Store(sub.ID, sub)
-	defer func() {
-		sub.Cleanup()
-		dataChannel.Subs.Delete(sub.ID)
-		b.Cleanup()
-	}()
+	channelData := b.ensure(channel)
 
-mainLoop:
-	for {
-		select {
-		case <-sub.Done:
-			break mainLoop
-		case <-dataChannel.Done:
-			break mainLoop
-		case data, ok := <-sub.Data:
-			_, err := sub.Writer.Write(data)
-			if err != nil {
-				slog.Error("error writing to sub", slog.Any("sub", sub.ID), slog.Any("channel", channel), slog.Any("error", err))
-				return err
-			}
+	b.Logger.Info("sub", "channel", channel, "id", sub.ID)
 
-			if !ok {
-				break mainLoop
-			}
-		}
+	channelData.Subs.Store(sub.ID, sub)
+	defer channelData.Subs.Delete(sub.ID)
+
+	select {
+	case channelData.Chan <- sub:
+		// message sent
+	case <-time.After(10 * time.Millisecond):
+		// message dropped
+	case <-sub.Done:
+		return nil
 	}
 
-	return nil
+	return sub.Wait()
 }
 
 func (b *PubSubMulticast) Pub(channel string, pub *Pub) error {
-	dataChannel := b.ensure(channel)
-	dataChannel.Pubs.Store(pub.ID, pub)
-	defer func() {
-		pub.Cleanup()
-		dataChannel.Pubs.Delete(pub.ID)
+	channelData := b.ensure(channel)
+	log := b.Logger.With("channel", channel)
+	log.Info("pub")
 
-		count := 0
-		dataChannel.Pubs.Range(func(I string, J *Pub) bool {
-			count++
-			return true
-		})
+	matches := []*Sub{}
+	writers := []io.Writer{}
 
-		if count == 0 {
-			dataChannel.onceData.Do(func() {
-				close(dataChannel.Data)
-			})
-		}
+	channelData.Pubs.Store(pub.ID, pub)
+	defer channelData.Pubs.Delete(pub.ID)
 
-		b.Cleanup()
-	}()
+	channelData.Subs.Range(func(I string, sub *Sub) bool {
+		log.Info("found match", "sub", sub.ID)
+		matches = append(matches, sub)
+		writers = append(writers, sub.Writer)
+		return true
+	})
 
-mainLoop:
-	for {
-		select {
-		case <-pub.Done:
-			break mainLoop
-		case <-dataChannel.Done:
-			break mainLoop
-		default:
-			data := make([]byte, 32*1024)
-			n, err := pub.Reader.Read(data)
-			data = data[:n]
+	if len(matches) == 0 {
+		for sub := range channelData.Chan {
+			log.Info("no subs found, waiting for sub")
 
-			select {
-			case dataChannel.Data <- data:
-			case <-pub.Done:
-				break mainLoop
-			case <-dataChannel.Done:
-				break mainLoop
+			if sub.Writer == nil {
+				return fmt.Errorf("pub closed")
 			}
-
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return nil
-				}
-
-				slog.Error("error reading from pub", slog.Any("pub", pub.ID), slog.Any("channel", channel), slog.Any("error", err))
-				return err
-			}
+			return b.Pub(channel, pub)
 		}
 	}
 
-	return nil
+	log.Info("copying data")
+	del := time.Now()
+	pub.SentAt = &del
+
+	writer := io.MultiWriter(writers...)
+	_, err := io.Copy(writer, pub.Reader)
+	if err != nil {
+		log.Error("pub", "err", err)
+	}
+	for _, sub := range matches {
+		select {
+		case sub.Error <- err:
+		case <-time.After(10 * time.Millisecond):
+			continue
+		case <-pub.Done:
+			return nil
+		}
+	}
+
+	<-pub.Done
+
+	return err
 }
+
+var (
+	_ PubSub = &PubSubMulticast{}
+)

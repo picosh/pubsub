@@ -40,7 +40,7 @@ func TestMulticastSubBlock(t *testing.T) {
 	name := "test-channel"
 	syncer := make(chan int)
 
-	cast := &PubSubMulticast{
+	cast := &PubSubBroadcast{
 		Logger:   slog.Default(),
 		Channels: syncmap.New[string, *Channel](),
 	}
@@ -92,7 +92,7 @@ func TestMulticastPubBlock(t *testing.T) {
 	name := "test-channel"
 	syncer := make(chan int)
 
-	cast := &PubSubMulticast{
+	cast := &PubSubBroadcast{
 		Logger:   slog.Default(),
 		Channels: syncmap.New[string, *Channel](),
 	}
@@ -145,7 +145,7 @@ func TestMulticastMultSubs(t *testing.T) {
 	name := "test-channel"
 	syncer := make(chan int)
 
-	cast := &PubSubMulticast{
+	cast := &PubSubBroadcast{
 		Logger:   slog.Default(),
 		Channels: syncmap.New[string, *Channel](),
 	}
