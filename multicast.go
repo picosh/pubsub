@@ -1,123 +1,192 @@
 package pubsub
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"log/slog"
-	"time"
+	"strings"
 
-	"github.com/google/uuid"
+	"github.com/antoniomika/syncmap"
 )
 
-/*
-multicast:
-
-	every pub event will be sent to all subs on a channel
-
-bidirectional blocking:
-
-	both pub and sub will wait for at least one
-	message on a channel before completing
-*/
 type PubSubMulticast struct {
-	Logger *slog.Logger
-	subs   []*Subscriber
-	Chan   chan *Subscriber
+	Logger   *slog.Logger
+	Channels *syncmap.Map[string, *Channel]
 }
 
-func (b *PubSubMulticast) GetSubs() []*Subscriber {
-	b.Logger.Info("getsubs")
-	return b.subs
-}
+func (b *PubSubMulticast) Cleanup() {
+	toRemove := []string{}
+	b.Channels.Range(func(I string, J *Channel) bool {
+		count := 0
+		J.Pubs.Range(func(K string, V *Pub) bool {
+			count++
+			return true
+		})
 
-func (b *PubSubMulticast) Sub(sub *Subscriber) error {
-	id := uuid.New()
-	sub.ID = id.String()
-	b.Logger.Info("sub", "channel", sub.Name, "id", id)
-	b.subs = append(b.subs, sub)
-	select {
-	case b.Chan <- sub:
-		// message sent
-	default:
-		// message dropped
-	}
+		J.Subs.Range(func(K string, V *Sub) bool {
+			count++
+			return true
+		})
 
-	return sub.Wait()
-}
-
-func (b *PubSubMulticast) UnSub(rm *Subscriber) error {
-	b.Logger.Info("unsub", "channel", rm.Name, "id", rm.ID)
-	next := []*Subscriber{}
-	for _, sub := range b.subs {
-		if sub.ID != rm.ID {
-			next = append(next, sub)
+		if count == 0 {
+			J.Cleanup()
+			toRemove = append(toRemove, I)
 		}
+
+		return true
+	})
+
+	for _, channel := range toRemove {
+		b.Channels.Delete(channel)
 	}
-	b.subs = next
-	return nil
 }
 
-func (b *PubSubMulticast) PubMatcher(msg *Msg, sub *Subscriber) bool {
-	return msg.Name == sub.Name
-}
-
-func (b *PubSubMulticast) Pub(msg *Msg) error {
-	log := b.Logger.With("channel", msg.Name)
-	log.Info("pub")
-
-	matches := []*Subscriber{}
-	writers := []io.Writer{}
-	for _, sub := range b.subs {
-		if b.PubMatcher(msg, sub) {
-			log.Info("found match", "sub", sub.ID)
-			matches = append(matches, sub)
-			writers = append(writers, sub.Writer)
+func (b *PubSubMulticast) GetChannels(channelPrefix string) []*Channel {
+	var chans []*Channel
+	b.Channels.Range(func(I string, J *Channel) bool {
+		if strings.HasPrefix(I, channelPrefix) {
+			chans = append(chans, J)
 		}
-	}
 
-	if len(matches) == 0 {
-		var sub *Subscriber
-		for {
-			log.Info("no subs found, waiting for sub")
-			sub = <-b.Chan
-			if b.PubMatcher(msg, sub) {
-				// empty subscriber is a signal to force a pub to stop
-				// waiting for a sub
-				if sub.Writer == nil {
-					return fmt.Errorf("pub closed")
-				}
-				return b.Pub(msg)
+		return true
+	})
+	return chans
+}
+
+func (b *PubSubMulticast) GetChannel(channel string) *Channel {
+	channelData, _ := b.Channels.Load(channel)
+	return channelData
+}
+
+func (b *PubSubMulticast) GetPubs(channel string) []*Pub {
+	var pubs []*Pub
+	b.Channels.Range(func(I string, J *Channel) bool {
+		found := channel == I
+		if found || channel == "*" {
+			J.Pubs.Range(func(K string, V *Pub) bool {
+				pubs = append(pubs, V)
+				return true
+			})
+		}
+
+		return !found
+	})
+	return pubs
+}
+
+func (b *PubSubMulticast) GetSubs(channel string) []*Sub {
+	var subs []*Sub
+	b.Channels.Range(func(I string, J *Channel) bool {
+		found := channel == I
+		if found || channel == "*" {
+			J.Subs.Range(func(K string, V *Sub) bool {
+				subs = append(subs, V)
+				return true
+			})
+		}
+
+		return !found
+	})
+	return subs
+}
+
+func (b *PubSubMulticast) ensure(channel string) *Channel {
+	dataChannel, _ := b.Channels.LoadOrStore(channel, &Channel{
+		Name: channel,
+		Done: make(chan struct{}),
+		Data: make(chan []byte),
+		Subs: syncmap.New[string, *Sub](),
+		Pubs: syncmap.New[string, *Pub](),
+	})
+	dataChannel.Handle()
+
+	return dataChannel
+}
+
+func (b *PubSubMulticast) Sub(channel string, sub *Sub) error {
+	dataChannel := b.ensure(channel)
+	dataChannel.Subs.Store(sub.ID, sub)
+	defer func() {
+		sub.Cleanup()
+		dataChannel.Subs.Delete(sub.ID)
+		b.Cleanup()
+	}()
+
+mainLoop:
+	for {
+		select {
+		case <-sub.Done:
+			break mainLoop
+		case <-dataChannel.Done:
+			break mainLoop
+		case data, ok := <-sub.Data:
+			_, err := sub.Writer.Write(data)
+			if err != nil {
+				slog.Error("error writing to sub", slog.Any("sub", sub.ID), slog.Any("channel", channel), slog.Any("error", err))
+				return err
+			}
+
+			if !ok {
+				break mainLoop
 			}
 		}
 	}
 
-	log.Info("copying data")
-	del := time.Now()
-	msg.SentAt = &del
+	return nil
+}
 
-	writer := io.MultiWriter(writers...)
-	_, err := io.Copy(writer, msg.Reader)
-	if err != nil {
-		log.Error("pub", "err", err)
-	}
-	for _, sub := range matches {
-		sub.Chan <- err
-		log.Info("sub unsub")
-		err = b.UnSub(sub)
-		if err != nil {
-			log.Error("unsub err", "err", err)
+func (b *PubSubMulticast) Pub(channel string, pub *Pub) error {
+	dataChannel := b.ensure(channel)
+	dataChannel.Pubs.Store(pub.ID, pub)
+	defer func() {
+		pub.Cleanup()
+		dataChannel.Pubs.Delete(pub.ID)
+
+		count := 0
+		dataChannel.Pubs.Range(func(I string, J *Pub) bool {
+			count++
+			return true
+		})
+
+		if count == 0 {
+			dataChannel.onceData.Do(func() {
+				close(dataChannel.Data)
+			})
+		}
+
+		b.Cleanup()
+	}()
+
+mainLoop:
+	for {
+		select {
+		case <-pub.Done:
+			break mainLoop
+		case <-dataChannel.Done:
+			break mainLoop
+		default:
+			data := make([]byte, 32*1024)
+			n, err := pub.Reader.Read(data)
+			data = data[:n]
+
+			select {
+			case dataChannel.Data <- data:
+			case <-pub.Done:
+				break mainLoop
+			case <-dataChannel.Done:
+				break mainLoop
+			}
+
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+
+				slog.Error("error reading from pub", slog.Any("pub", pub.ID), slog.Any("channel", channel), slog.Any("error", err))
+				return err
+			}
 		}
 	}
 
-	return err
-}
-
-func (b *PubSubMulticast) UnPub(msg *Msg) error {
-	b.Logger.Info("unpub", "channel", msg.Name)
-	// if the message hasn't been delivered then send a cancel sub to
-	// the multicast channel
-	if msg.SentAt == nil {
-		b.Chan <- &Subscriber{Name: msg.Name}
-	}
 	return nil
 }

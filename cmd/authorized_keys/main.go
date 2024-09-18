@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/antoniomika/syncmap"
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
+	"github.com/google/uuid"
 	"github.com/picosh/pubsub"
 )
 
@@ -32,7 +35,6 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 				return
 			}
 
-			ctx := sesh.Context()
 			cmd := strings.TrimSpace(args[0])
 			channel := args[1]
 			logger := cfg.Logger.With(
@@ -45,37 +47,37 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 			if cmd == "help" {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
 			} else if cmd == "sub" {
-				sub := &pubsub.Subscriber{
-					Name:   channel,
+				sub := &pubsub.Sub{
+					ID:     uuid.NewString(),
 					Writer: sesh,
-					Chan:   make(chan error),
+					Done:   make(chan struct{}),
+					Data:   make(chan []byte),
 				}
+
 				go func() {
-					<-ctx.Done()
-					err := cfg.PubSub.UnSub(sub)
-					if err != nil {
-						wish.Errorln(sesh, err)
-					}
+					<-sesh.Context().Done()
+					sub.Cleanup()
 				}()
-				err := cfg.PubSub.Sub(sub)
+
+				err := cfg.PubSub.Sub(channel, sub)
 				if err != nil {
-					wish.Errorln(sesh, err)
+					logger.Error("error from sub", slog.Any("error", err), slog.String("sub", sub.ID))
 				}
 			} else if cmd == "pub" {
-				msg := &pubsub.Msg{
-					Name:   channel,
+				pub := &pubsub.Pub{
+					ID:     uuid.NewString(),
+					Done:   make(chan struct{}),
 					Reader: sesh,
 				}
+
 				go func() {
-					<-ctx.Done()
-					err := cfg.PubSub.UnPub(msg)
-					if err != nil {
-						wish.Errorln(sesh, err)
-					}
+					<-sesh.Context().Done()
+					pub.Cleanup()
 				}()
-				err := cfg.PubSub.Pub(msg)
+
+				err := cfg.PubSub.Pub(channel, pub)
 				if err != nil {
-					wish.Errorln(sesh, err)
+					logger.Error("error from pub", slog.Any("error", err), slog.String("pub", pub.ID))
 				}
 			} else {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
@@ -94,12 +96,13 @@ func main() {
 	cfg := &pubsub.Cfg{
 		Logger: logger,
 		PubSub: &pubsub.PubSubMulticast{
-			Logger: logger,
-			Chan:   make(chan *pubsub.Subscriber),
+			Logger:   logger,
+			Channels: syncmap.New[string, *pubsub.Channel](),
 		},
 	}
 
 	s, err := wish.NewServer(
+		ssh.NoPty(),
 		wish.WithAddress(fmt.Sprintf("%s:%s", host, port)),
 		wish.WithHostKeyPath("ssh_data/term_info_ed25519"),
 		wish.WithAuthorizedKeys(keyPath),
@@ -122,6 +125,26 @@ func main() {
 	go func() {
 		if err = s.ListenAndServe(); err != nil {
 			logger.Error(err.Error())
+		}
+	}()
+
+	go func() {
+		for {
+			slog.Info("Debug Info", slog.Int("goroutines", runtime.NumGoroutine()))
+			select {
+			case <-time.After(5 * time.Second):
+				for _, channel := range cfg.PubSub.GetChannels("") {
+					slog.Info("channel online", slog.Any("channel", channel.Name))
+					for _, pub := range cfg.PubSub.GetPubs(channel.Name) {
+						slog.Info("pub online", slog.Any("channel", channel.Name), slog.Any("pub", pub.ID))
+					}
+					for _, sub := range cfg.PubSub.GetSubs(channel.Name) {
+						slog.Info("sub online", slog.Any("channel", channel.Name), slog.Any("sub", sub.ID))
+					}
+				}
+			case <-done:
+				return
+			}
 		}
 	}()
 
