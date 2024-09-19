@@ -30,7 +30,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 		return func(sesh ssh.Session) {
 			args := sesh.Command()
 			if len(args) < 2 {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
 				next(sesh)
 				return
 			}
@@ -45,7 +45,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 			logger.Info("running cli")
 
 			if cmd == "help" {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
 			} else if cmd == "sub" {
 				sub := &pubsub.Sub{
 					ID:     uuid.NewString(),
@@ -79,8 +79,29 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 				if err != nil {
 					logger.Error("error from pub", slog.Any("error", err), slog.String("pub", pub.ID))
 				}
+			} else if cmd == "pipe" {
+				pipeClient := &pubsub.PipeClient{
+					ID:         uuid.NewString(),
+					Done:       make(chan struct{}),
+					Data:       make(chan pubsub.PipeMessage),
+					Replay:     args[len(args)-1] == "replay",
+					ReadWriter: sesh,
+				}
+
+				go func() {
+					<-sesh.Context().Done()
+					pipeClient.Cleanup()
+				}()
+
+				readErr, writeErr := cfg.PubSub.Pipe(channel, pipeClient)
+				if readErr != nil {
+					logger.Error("error reading from pipe", slog.Any("error", readErr), slog.String("pipeClient", pipeClient.ID))
+				}
+				if writeErr != nil {
+					logger.Error("error writing to pipe", slog.Any("error", writeErr), slog.String("pipeClient", pipeClient.ID))
+				}
 			} else {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub) {channel}")
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
 			}
 
 			next(sesh)
@@ -98,6 +119,7 @@ func main() {
 		PubSub: &pubsub.PubSubMulticast{
 			Logger:   logger,
 			Channels: syncmap.New[string, *pubsub.Channel](),
+			Pipes:    syncmap.New[string, *pubsub.Pipe](),
 		},
 	}
 

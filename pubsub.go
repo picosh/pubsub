@@ -15,7 +15,7 @@ type Channel struct {
 	Data        chan []byte
 	Subs        *syncmap.Map[string, *Sub]
 	Pubs        *syncmap.Map[string, *Pub]
-	once        sync.Once
+	handleOnce  sync.Once
 	cleanupOnce sync.Once
 	onceData    sync.Once
 }
@@ -30,7 +30,7 @@ func (c *Channel) Cleanup() {
 }
 
 func (c *Channel) Handle() {
-	c.once.Do(func() {
+	c.handleOnce.Do(func() {
 		go func() {
 			defer func() {
 				c.Subs.Range(func(I string, J *Sub) bool {
@@ -122,11 +122,104 @@ func (pub *Pub) Cleanup() {
 	})
 }
 
+type PipeClient struct {
+	ID         string
+	Done       chan struct{}
+	Data       chan PipeMessage
+	ReadWriter io.ReadWriter
+	Replay     bool
+	once       sync.Once
+	onceData   sync.Once
+}
+
+func (pipeClient *PipeClient) Cleanup() {
+	pipeClient.once.Do(func() {
+		close(pipeClient.Done)
+	})
+}
+
+type PipeMessage struct {
+	Data      []byte
+	ClientID  string
+	Direction PipeDirection
+}
+
+type Pipe struct {
+	Name        string
+	Clients     *syncmap.Map[string, *PipeClient]
+	Done        chan struct{}
+	Data        chan PipeMessage
+	handleOnce  sync.Once
+	cleanupOnce sync.Once
+}
+
+func (pipe *Pipe) Handle() {
+	pipe.handleOnce.Do(func() {
+		go func() {
+			defer func() {
+				pipe.Clients.Range(func(I string, J *PipeClient) bool {
+					J.Cleanup()
+					return true
+				})
+			}()
+
+			for {
+				select {
+				case <-pipe.Done:
+					return
+				case data, ok := <-pipe.Data:
+					pipe.Clients.Range(func(I string, J *PipeClient) bool {
+						if !ok {
+							J.onceData.Do(func() {
+								close(J.Data)
+							})
+							return true
+						}
+
+						data.Direction = PipeOutput
+
+						select {
+						case J.Data <- data:
+							return true
+						case <-J.Done:
+							return true
+						case <-pipe.Done:
+							return true
+						case <-time.After(1 * time.Second):
+							slog.Error("timeout writing to pipe", slog.String("pipeClient", I), slog.String("pipe", pipe.Name))
+							return true
+						}
+					})
+				case <-time.After(1 * time.Millisecond):
+					count := 0
+					pipe.Clients.Range(func(I string, J *PipeClient) bool {
+						count++
+						return true
+					})
+					if count == 0 {
+						return
+					}
+				}
+			}
+		}()
+	})
+}
+
+func (pipe *Pipe) Cleanup() {
+	pipe.cleanupOnce.Do(func() {
+		close(pipe.Done)
+		close(pipe.Data)
+	})
+}
+
 type PubSub interface {
 	GetSubs(channel string) []*Sub
 	GetPubs(channel string) []*Pub
 	GetChannels(channelPrefix string) []*Channel
+	GetPipes(pipePrefix string) []*Pipe
 	GetChannel(channel string) *Channel
+	GetPipe(pipe string) *Pipe
+	Pipe(pipe string, pipeClient *PipeClient) (error, error)
 	Sub(channel string, sub *Sub) error
 	Pub(channel string, pub *Pub) error
 }
