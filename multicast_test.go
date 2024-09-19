@@ -43,6 +43,7 @@ func TestMulticastSubBlock(t *testing.T) {
 	cast := &PubSubMulticast{
 		Logger:   slog.Default(),
 		Channels: syncmap.New[string, *Channel](),
+		Pipes:    syncmap.New[string, *Pipe](),
 	}
 
 	var wg sync.WaitGroup
@@ -95,6 +96,7 @@ func TestMulticastPubBlock(t *testing.T) {
 	cast := &PubSubMulticast{
 		Logger:   slog.Default(),
 		Channels: syncmap.New[string, *Channel](),
+		Pipes:    syncmap.New[string, *Pipe](),
 	}
 
 	var wg sync.WaitGroup
@@ -148,6 +150,7 @@ func TestMulticastMultSubs(t *testing.T) {
 	cast := &PubSubMulticast{
 		Logger:   slog.Default(),
 		Channels: syncmap.New[string, *Channel](),
+		Pipes:    syncmap.New[string, *Pipe](),
 	}
 
 	var wg sync.WaitGroup
