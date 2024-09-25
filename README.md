@@ -1,8 +1,12 @@
 # pubsub
 
-pubsub over ssh
+A generic pubsub implementation for Go.
+
+## pubsub over ssh
 
 The simplest pubsub system for everyday automation needs.
+
+Using `wish` we can integrate our pubsub system into an SSH app.
 
 [![asciicast](https://asciinema.org/a/674287.svg)](https://asciinema.org/a/674287)
 
