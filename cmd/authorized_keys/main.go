@@ -59,7 +59,8 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					sub.Cleanup()
 				}()
 
-				err := cfg.PubSub.Sub(channel, sub)
+				channel := pubsub.NewChannel(channel)
+				err := cfg.PubSub.Sub([]*pubsub.Channel{channel}, sub)
 				if err != nil {
 					logger.Error("error from sub", slog.Any("error", err), slog.String("sub", sub.ID))
 				}
@@ -75,7 +76,8 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					pub.Cleanup()
 				}()
 
-				err := cfg.PubSub.Pub(channel, pub)
+				channel := pubsub.NewChannel(channel)
+				err := cfg.PubSub.Pub([]*pubsub.Channel{channel}, pub)
 				if err != nil {
 					logger.Error("error from pub", slog.Any("error", err), slog.String("pub", pub.ID))
 				}
@@ -93,12 +95,14 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					pipeClient.Cleanup()
 				}()
 
-				readErr, writeErr := cfg.PubSub.Pipe(channel, pipeClient)
-				if readErr != nil {
-					logger.Error("error reading from pipe", slog.Any("error", readErr), slog.String("pipeClient", pipeClient.ID))
-				}
-				if writeErr != nil {
-					logger.Error("error writing to pipe", slog.Any("error", writeErr), slog.String("pipeClient", pipeClient.ID))
+				pipe := pubsub.NewPipe(channel)
+				err := cfg.PubSub.Pipe([]*pubsub.Pipe{pipe}, pipeClient)
+				if err != nil {
+					logger.Error(
+						"pipe error",
+						slog.Any("error", err),
+						slog.String("pipeClient", pipeClient.ID),
+					)
 				}
 			} else {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
@@ -155,12 +159,12 @@ func main() {
 			slog.Info("Debug Info", slog.Int("goroutines", runtime.NumGoroutine()))
 			select {
 			case <-time.After(5 * time.Second):
-				for _, channel := range cfg.PubSub.GetChannels("") {
+				for _, channel := range cfg.PubSub.GetChannels() {
 					slog.Info("channel online", slog.Any("channel", channel.Name))
-					for _, pub := range cfg.PubSub.GetPubs(channel.Name) {
+					for _, pub := range cfg.PubSub.GetPubs([]*pubsub.Channel{channel}) {
 						slog.Info("pub online", slog.Any("channel", channel.Name), slog.Any("pub", pub.ID))
 					}
-					for _, sub := range cfg.PubSub.GetSubs(channel.Name) {
+					for _, sub := range cfg.PubSub.GetSubs([]*pubsub.Channel{channel}) {
 						slog.Info("sub online", slog.Any("channel", channel.Name), slog.Any("sub", sub.ID))
 					}
 				}

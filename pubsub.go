@@ -213,15 +213,13 @@ func (pipe *Pipe) Cleanup() {
 }
 
 type PubSub interface {
-	GetSubs(channel string) []*Sub
-	GetPubs(channel string) []*Pub
-	GetChannels(channelPrefix string) []*Channel
-	GetPipes(pipePrefix string) []*Pipe
-	GetChannel(channel string) *Channel
-	GetPipe(pipe string) *Pipe
-	Pipe(pipe string, pipeClient *PipeClient) (error, error)
-	Sub(channel string, sub *Sub) error
-	Pub(channel string, pub *Pub) error
+	GetSubs(channels []*Channel) []*Sub
+	GetPubs(channels []*Channel) []*Pub
+	GetChannels() []*Channel
+	GetPipes() []*Pipe
+	Pipe(pipes []*Pipe, pipeClient *PipeClient) error
+	Sub(channels []*Channel, sub *Sub) error
+	Pub(channel []*Channel, pub *Pub) error
 }
 
 type Cfg struct {

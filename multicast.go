@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"strings"
 	"sync"
 
 	"github.com/antoniomika/syncmap"
@@ -22,6 +21,9 @@ type PubSubMulticast struct {
 	Channels *syncmap.Map[string, *Channel]
 	Pipes    *syncmap.Map[string, *Pipe]
 }
+
+var _ PubSub = &PubSubMulticast{}
+var _ PubSub = (*PubSubMulticast)(nil)
 
 func (b *PubSubMulticast) Cleanup() {
 	toRemove := []string{}
@@ -70,36 +72,64 @@ func (b *PubSubMulticast) Cleanup() {
 	}
 }
 
-func (b *PubSubMulticast) ensurePipe(pipe string) *Pipe {
-	dataPipe, _ := b.Pipes.LoadOrStore(pipe, &Pipe{
-		Name:    pipe,
+func NewPipe(name string) *Pipe {
+	return &Pipe{
+		Name:    name,
 		Clients: syncmap.New[string, *PipeClient](),
 		Done:    make(chan struct{}),
 		Data:    make(chan PipeMessage),
-	})
-	dataPipe.Handle()
+	}
+}
 
+func (b *PubSubMulticast) ensurePipe(pipe *Pipe) *Pipe {
+	dataPipe, _ := b.Pipes.LoadOrStore(pipe.Name, pipe)
+	dataPipe.Handle()
 	return dataPipe
 }
 
-func (b *PubSubMulticast) GetPipes(pipePrefix string) []*Pipe {
+func (b *PubSubMulticast) GetPipes() []*Pipe {
 	var pipes []*Pipe
 	b.Pipes.Range(func(I string, J *Pipe) bool {
-		if strings.HasPrefix(I, pipePrefix) {
-			pipes = append(pipes, J)
-		}
-
+		pipes = append(pipes, J)
 		return true
 	})
 	return pipes
 }
 
-func (b *PubSubMulticast) GetPipe(pipe string) *Pipe {
-	pipeData, _ := b.Pipes.Load(pipe)
-	return pipeData
+func (b *PubSubMulticast) Pipe(pipes []*Pipe, pipeClient *PipeClient) error {
+	var wg sync.WaitGroup
+	var finErr error
+	for _, p := range pipes {
+		wg.Add(1)
+		go func(pipe *Pipe) {
+			readErr, writeErr := b._pipe(pipe, pipeClient)
+			if writeErr != nil {
+				slog.Error(
+					"error writing to sub",
+					slog.String("pipeClient", pipeClient.ID),
+					slog.String("pipe", pipe.Name),
+					slog.Any("error", writeErr),
+				)
+				finErr = errors.Join(finErr, writeErr)
+			}
+
+			if readErr != nil {
+				slog.Error(
+					"error reading from pipe",
+					slog.String("pipeClient", pipeClient.ID),
+					slog.String("pipe", pipe.Name),
+					slog.Any("error", readErr),
+				)
+				finErr = errors.Join(finErr, writeErr)
+			}
+			wg.Done()
+		}(p)
+	}
+	wg.Wait()
+	return finErr
 }
 
-func (b *PubSubMulticast) Pipe(pipe string, pipeClient *PipeClient) (error, error) {
+func (b *PubSubMulticast) _pipe(pipe *Pipe, pipeClient *PipeClient) (error, error) {
 	pipeData := b.ensurePipe(pipe)
 	pipeData.Clients.Store(pipeClient.ID, pipeClient)
 	defer func() {
@@ -139,7 +169,6 @@ func (b *PubSubMulticast) Pipe(pipe string, pipeClient *PipeClient) (error, erro
 
 					_, err := pipeClient.ReadWriter.Write(data.Data)
 					if err != nil {
-						slog.Error("error writing to sub", slog.String("pipeClient", pipeClient.ID), slog.String("pipe", pipe), slog.Any("error", err))
 						writeErr = err
 						return
 					}
@@ -183,7 +212,6 @@ func (b *PubSubMulticast) Pipe(pipe string, pipeClient *PipeClient) (error, erro
 					return
 				}
 
-				slog.Error("error reading from pipe", slog.String("pipeClient", pipeClient.ID), slog.String("pipe", pipe), slog.Any("error", err))
 				readErr = err
 				return
 			}
@@ -195,13 +223,10 @@ func (b *PubSubMulticast) Pipe(pipe string, pipeClient *PipeClient) (error, erro
 	return readErr, writeErr
 }
 
-func (b *PubSubMulticast) GetChannels(channelPrefix string) []*Channel {
+func (b *PubSubMulticast) GetChannels() []*Channel {
 	var chans []*Channel
 	b.Channels.Range(func(I string, J *Channel) bool {
-		if strings.HasPrefix(I, channelPrefix) {
-			chans = append(chans, J)
-		}
-
+		chans = append(chans, J)
 		return true
 	})
 	return chans
@@ -212,52 +237,45 @@ func (b *PubSubMulticast) GetChannel(channel string) *Channel {
 	return channelData
 }
 
-func (b *PubSubMulticast) GetPubs(channel string) []*Pub {
+func (b *PubSubMulticast) GetPubs(channels []*Channel) []*Pub {
 	var pubs []*Pub
-	b.Channels.Range(func(I string, J *Channel) bool {
-		found := channel == I
-		if found || channel == "*" {
-			J.Pubs.Range(func(K string, V *Pub) bool {
-				pubs = append(pubs, V)
-				return true
-			})
-		}
-
-		return !found
-	})
+	for _, channel := range channels {
+		channel.Pubs.Range(func(K string, V *Pub) bool {
+			pubs = append(pubs, V)
+			return true
+		})
+	}
 	return pubs
 }
 
-func (b *PubSubMulticast) GetSubs(channel string) []*Sub {
+func (b *PubSubMulticast) GetSubs(channels []*Channel) []*Sub {
 	var subs []*Sub
-	b.Channels.Range(func(I string, J *Channel) bool {
-		found := channel == I
-		if found || channel == "*" {
-			J.Subs.Range(func(K string, V *Sub) bool {
-				subs = append(subs, V)
-				return true
-			})
-		}
-
-		return !found
-	})
+	for _, channel := range channels {
+		channel.Subs.Range(func(K string, V *Sub) bool {
+			subs = append(subs, V)
+			return true
+		})
+	}
 	return subs
 }
 
-func (b *PubSubMulticast) ensureChannel(channel string) *Channel {
-	dataChannel, _ := b.Channels.LoadOrStore(channel, &Channel{
-		Name: channel,
+func NewChannel(name string) *Channel {
+	return &Channel{
+		Name: name,
 		Done: make(chan struct{}),
 		Data: make(chan []byte),
 		Subs: syncmap.New[string, *Sub](),
 		Pubs: syncmap.New[string, *Pub](),
-	})
-	dataChannel.Handle()
+	}
+}
 
+func (b *PubSubMulticast) ensureChannel(channel *Channel) *Channel {
+	dataChannel, _ := b.Channels.LoadOrStore(channel.Name, channel)
+	dataChannel.Handle()
 	return dataChannel
 }
 
-func (b *PubSubMulticast) Sub(channel string, sub *Sub) error {
+func (b *PubSubMulticast) _sub(channel *Channel, sub *Sub) error {
 	dataChannel := b.ensureChannel(channel)
 	dataChannel.Subs.Store(sub.ID, sub)
 	defer func() {
@@ -276,7 +294,6 @@ mainLoop:
 		case data, ok := <-sub.Data:
 			_, err := sub.Writer.Write(data)
 			if err != nil {
-				slog.Error("error writing to sub", slog.String("sub", sub.ID), slog.String("channel", channel), slog.Any("error", err))
 				return err
 			}
 
@@ -289,7 +306,53 @@ mainLoop:
 	return nil
 }
 
-func (b *PubSubMulticast) Pub(channel string, pub *Pub) error {
+func (b *PubSubMulticast) Sub(channels []*Channel, sub *Sub) error {
+	var wg sync.WaitGroup
+	var finErr error
+	for _, ch := range channels {
+		wg.Add(1)
+		go func(channel *Channel) {
+			err := b._sub(channel, sub)
+			if err != nil {
+				b.Logger.Error(
+					"error writing to sub",
+					slog.String("sub", sub.ID),
+					slog.String("channel", channel.Name),
+					slog.Any("error", err),
+				)
+				finErr = errors.Join(finErr, err)
+			}
+			wg.Done()
+		}(ch)
+	}
+	wg.Wait()
+	return finErr
+}
+
+func (b *PubSubMulticast) Pub(channels []*Channel, pub *Pub) error {
+	var wg sync.WaitGroup
+	var finErr error
+	for _, ch := range channels {
+		wg.Add(1)
+		go func(channel *Channel) {
+			err := b._pub(channel, pub)
+			if err != nil {
+				b.Logger.Error(
+					"error writing to sub",
+					slog.String("pub", pub.ID),
+					slog.String("channel", channel.Name),
+					slog.Any("error", err),
+				)
+				finErr = errors.Join(finErr, err)
+			}
+			wg.Done()
+		}(ch)
+	}
+	wg.Wait()
+	return finErr
+}
+
+func (b *PubSubMulticast) _pub(channel *Channel, pub *Pub) error {
 	dataChannel := b.ensureChannel(channel)
 	dataChannel.Pubs.Store(pub.ID, pub)
 	defer func() {
@@ -336,7 +399,7 @@ mainLoop:
 					return nil
 				}
 
-				slog.Error("error reading from pub", slog.String("pub", pub.ID), slog.String("channel", channel), slog.Any("error", err))
+				slog.Error("error reading from pub", slog.String("pub", pub.ID), slog.String("channel", channel.Name), slog.Any("error", err))
 				return err
 			}
 		}
