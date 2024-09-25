@@ -10,7 +10,7 @@ import (
 )
 
 type Channel struct {
-	Name        string
+	ID          string
 	Done        chan struct{}
 	Data        chan []byte
 	Subs        *syncmap.Map[string, *Sub]
@@ -81,7 +81,7 @@ func (c *Channel) Handle() {
 						case <-c.Done:
 							return true
 						case <-time.After(1 * time.Second):
-							slog.Error("timeout writing to sub", slog.Any("sub", I), slog.Any("channel", c.Name))
+							slog.Error("timeout writing to sub", slog.Any("sub", I), slog.Any("channel", c.ID))
 							return true
 						}
 					})
@@ -145,7 +145,7 @@ type PipeMessage struct {
 }
 
 type Pipe struct {
-	Name        string
+	ID          string
 	Clients     *syncmap.Map[string, *PipeClient]
 	Done        chan struct{}
 	Data        chan PipeMessage
@@ -186,7 +186,7 @@ func (pipe *Pipe) Handle() {
 						case <-pipe.Done:
 							return true
 						case <-time.After(1 * time.Second):
-							slog.Error("timeout writing to pipe", slog.String("pipeClient", I), slog.String("pipe", pipe.Name))
+							slog.Error("timeout writing to pipe", slog.String("pipeClient", I), slog.String("pipe", pipe.ID))
 							return true
 						}
 					})
@@ -213,13 +213,13 @@ func (pipe *Pipe) Cleanup() {
 }
 
 type PubSub interface {
-	GetSubs(channels []*Channel) []*Sub
-	GetPubs(channels []*Channel) []*Pub
+	GetSubs() []*Sub
+	GetPubs() []*Pub
 	GetChannels() []*Channel
 	GetPipes() []*Pipe
-	Pipe(pipes []*Pipe, pipeClient *PipeClient) error
-	Sub(channels []*Channel, sub *Sub) error
-	Pub(channel []*Channel, pub *Pub) error
+	Pipe(pipeClient *PipeClient, pipes []*Pipe) error
+	Sub(sub *Sub, channels []*Channel) error
+	Pub(pub *Pub, channel []*Channel) error
 }
 
 type Cfg struct {

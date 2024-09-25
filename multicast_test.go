@@ -59,7 +59,7 @@ func TestMulticastSubBlock(t *testing.T) {
 		orderActual += "sub-"
 		syncer <- 0
 		channel := NewChannel(name)
-		fmt.Println(cast.Sub([]*Channel{channel}, sub))
+		fmt.Println(cast.Sub(sub, []*Channel{channel}))
 		wg.Done()
 	}()
 
@@ -73,7 +73,7 @@ func TestMulticastSubBlock(t *testing.T) {
 		}
 		orderActual += "pub-"
 		channel := NewChannel(name)
-		fmt.Println(cast.Pub([]*Channel{channel}, pub))
+		fmt.Println(cast.Pub(pub, []*Channel{channel}))
 		wg.Done()
 	}()
 
@@ -113,7 +113,7 @@ func TestMulticastPubBlock(t *testing.T) {
 		orderActual += "pub-"
 		syncer <- 0
 		channel := NewChannel(name)
-		fmt.Println(cast.Pub([]*Channel{channel}, pub))
+		fmt.Println(cast.Pub(pub, []*Channel{channel}))
 		wg.Done()
 	}()
 
@@ -129,7 +129,7 @@ func TestMulticastPubBlock(t *testing.T) {
 		orderActual += "sub-"
 		wg.Done()
 		channel := NewChannel(name)
-		fmt.Println(cast.Sub([]*Channel{channel}, sub))
+		fmt.Println(cast.Sub(sub, []*Channel{channel}))
 	}()
 
 	wg.Wait()
@@ -170,7 +170,7 @@ func TestMulticastMultSubs(t *testing.T) {
 		orderActual += "sub-"
 		syncer <- 0
 		channel := NewChannel(name)
-		fmt.Println(cast.Sub([]*Channel{channel}, sub))
+		fmt.Println(cast.Sub(sub, []*Channel{channel}))
 		wg.Done()
 	}()
 
@@ -186,7 +186,7 @@ func TestMulticastMultSubs(t *testing.T) {
 		orderActual += "sub-"
 		syncer <- 0
 		channel := NewChannel(name)
-		fmt.Println(cast.Sub([]*Channel{channel}, sub))
+		fmt.Println(cast.Sub(sub, []*Channel{channel}))
 		wg.Done()
 	}()
 
@@ -200,7 +200,7 @@ func TestMulticastMultSubs(t *testing.T) {
 		}
 		orderActual += "pub-"
 		channel := NewChannel(name)
-		fmt.Println(cast.Pub([]*Channel{channel}, pub))
+		fmt.Println(cast.Pub(pub, []*Channel{channel}))
 		wg.Done()
 	}()
 

@@ -74,7 +74,7 @@ func (b *PubSubMulticast) Cleanup() {
 
 func NewPipe(name string) *Pipe {
 	return &Pipe{
-		Name:    name,
+		ID:      name,
 		Clients: syncmap.New[string, *PipeClient](),
 		Done:    make(chan struct{}),
 		Data:    make(chan PipeMessage),
@@ -82,7 +82,7 @@ func NewPipe(name string) *Pipe {
 }
 
 func (b *PubSubMulticast) ensurePipe(pipe *Pipe) *Pipe {
-	dataPipe, _ := b.Pipes.LoadOrStore(pipe.Name, pipe)
+	dataPipe, _ := b.Pipes.LoadOrStore(pipe.ID, pipe)
 	dataPipe.Handle()
 	return dataPipe
 }
@@ -96,7 +96,7 @@ func (b *PubSubMulticast) GetPipes() []*Pipe {
 	return pipes
 }
 
-func (b *PubSubMulticast) Pipe(pipes []*Pipe, pipeClient *PipeClient) error {
+func (b *PubSubMulticast) Pipe(pipeClient *PipeClient, pipes []*Pipe) error {
 	var wg sync.WaitGroup
 	var finErr error
 	for _, p := range pipes {
@@ -107,7 +107,7 @@ func (b *PubSubMulticast) Pipe(pipes []*Pipe, pipeClient *PipeClient) error {
 				slog.Error(
 					"error writing to sub",
 					slog.String("pipeClient", pipeClient.ID),
-					slog.String("pipe", pipe.Name),
+					slog.String("pipe", pipe.ID),
 					slog.Any("error", writeErr),
 				)
 				finErr = errors.Join(finErr, writeErr)
@@ -117,7 +117,7 @@ func (b *PubSubMulticast) Pipe(pipes []*Pipe, pipeClient *PipeClient) error {
 				slog.Error(
 					"error reading from pipe",
 					slog.String("pipeClient", pipeClient.ID),
-					slog.String("pipe", pipe.Name),
+					slog.String("pipe", pipe.ID),
 					slog.Any("error", readErr),
 				)
 				finErr = errors.Join(finErr, writeErr)
@@ -237,9 +237,9 @@ func (b *PubSubMulticast) GetChannel(channel string) *Channel {
 	return channelData
 }
 
-func (b *PubSubMulticast) GetPubs(channels []*Channel) []*Pub {
+func (b *PubSubMulticast) GetPubs() []*Pub {
 	var pubs []*Pub
-	for _, channel := range channels {
+	for _, channel := range b.GetChannels() {
 		channel.Pubs.Range(func(K string, V *Pub) bool {
 			pubs = append(pubs, V)
 			return true
@@ -248,9 +248,9 @@ func (b *PubSubMulticast) GetPubs(channels []*Channel) []*Pub {
 	return pubs
 }
 
-func (b *PubSubMulticast) GetSubs(channels []*Channel) []*Sub {
+func (b *PubSubMulticast) GetSubs() []*Sub {
 	var subs []*Sub
-	for _, channel := range channels {
+	for _, channel := range b.GetChannels() {
 		channel.Subs.Range(func(K string, V *Sub) bool {
 			subs = append(subs, V)
 			return true
@@ -261,7 +261,7 @@ func (b *PubSubMulticast) GetSubs(channels []*Channel) []*Sub {
 
 func NewChannel(name string) *Channel {
 	return &Channel{
-		Name: name,
+		ID:   name,
 		Done: make(chan struct{}),
 		Data: make(chan []byte),
 		Subs: syncmap.New[string, *Sub](),
@@ -270,7 +270,7 @@ func NewChannel(name string) *Channel {
 }
 
 func (b *PubSubMulticast) ensureChannel(channel *Channel) *Channel {
-	dataChannel, _ := b.Channels.LoadOrStore(channel.Name, channel)
+	dataChannel, _ := b.Channels.LoadOrStore(channel.ID, channel)
 	dataChannel.Handle()
 	return dataChannel
 }
@@ -306,7 +306,7 @@ mainLoop:
 	return nil
 }
 
-func (b *PubSubMulticast) Sub(channels []*Channel, sub *Sub) error {
+func (b *PubSubMulticast) Sub(sub *Sub, channels []*Channel) error {
 	var wg sync.WaitGroup
 	var finErr error
 	for _, ch := range channels {
@@ -317,7 +317,7 @@ func (b *PubSubMulticast) Sub(channels []*Channel, sub *Sub) error {
 				b.Logger.Error(
 					"error writing to sub",
 					slog.String("sub", sub.ID),
-					slog.String("channel", channel.Name),
+					slog.String("channel", channel.ID),
 					slog.Any("error", err),
 				)
 				finErr = errors.Join(finErr, err)
@@ -329,7 +329,7 @@ func (b *PubSubMulticast) Sub(channels []*Channel, sub *Sub) error {
 	return finErr
 }
 
-func (b *PubSubMulticast) Pub(channels []*Channel, pub *Pub) error {
+func (b *PubSubMulticast) Pub(pub *Pub, channels []*Channel) error {
 	var wg sync.WaitGroup
 	var finErr error
 	for _, ch := range channels {
@@ -340,7 +340,7 @@ func (b *PubSubMulticast) Pub(channels []*Channel, pub *Pub) error {
 				b.Logger.Error(
 					"error writing to sub",
 					slog.String("pub", pub.ID),
-					slog.String("channel", channel.Name),
+					slog.String("channel", channel.ID),
 					slog.Any("error", err),
 				)
 				finErr = errors.Join(finErr, err)
@@ -399,7 +399,7 @@ mainLoop:
 					return nil
 				}
 
-				slog.Error("error reading from pub", slog.String("pub", pub.ID), slog.String("channel", channel.Name), slog.Any("error", err))
+				slog.Error("error reading from pub", slog.String("pub", pub.ID), slog.String("channel", channel.ID), slog.Any("error", err))
 				return err
 			}
 		}

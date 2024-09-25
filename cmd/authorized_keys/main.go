@@ -60,7 +60,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 				}()
 
 				channel := pubsub.NewChannel(channel)
-				err := cfg.PubSub.Sub([]*pubsub.Channel{channel}, sub)
+				err := cfg.PubSub.Sub(sub, []*pubsub.Channel{channel})
 				if err != nil {
 					logger.Error("error from sub", slog.Any("error", err), slog.String("sub", sub.ID))
 				}
@@ -77,7 +77,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 				}()
 
 				channel := pubsub.NewChannel(channel)
-				err := cfg.PubSub.Pub([]*pubsub.Channel{channel}, pub)
+				err := cfg.PubSub.Pub(pub, []*pubsub.Channel{channel})
 				if err != nil {
 					logger.Error("error from pub", slog.Any("error", err), slog.String("pub", pub.ID))
 				}
@@ -96,7 +96,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 				}()
 
 				pipe := pubsub.NewPipe(channel)
-				err := cfg.PubSub.Pipe([]*pubsub.Pipe{pipe}, pipeClient)
+				err := cfg.PubSub.Pipe(pipeClient, []*pubsub.Pipe{pipe})
 				if err != nil {
 					logger.Error(
 						"pipe error",
@@ -160,12 +160,16 @@ func main() {
 			select {
 			case <-time.After(5 * time.Second):
 				for _, channel := range cfg.PubSub.GetChannels() {
-					slog.Info("channel online", slog.Any("channel", channel.Name))
-					for _, pub := range cfg.PubSub.GetPubs([]*pubsub.Channel{channel}) {
-						slog.Info("pub online", slog.Any("channel", channel.Name), slog.Any("pub", pub.ID))
+					slog.Info("channel online", slog.Any("channel", channel.ID))
+					for _, pub := range cfg.PubSub.GetPubs() {
+						if pub.ID == channel.ID {
+							slog.Info("pub online", slog.Any("channel", channel.ID), slog.Any("pub", pub.ID))
+						}
 					}
-					for _, sub := range cfg.PubSub.GetSubs([]*pubsub.Channel{channel}) {
-						slog.Info("sub online", slog.Any("channel", channel.Name), slog.Any("sub", sub.ID))
+					for _, sub := range cfg.PubSub.GetSubs() {
+						if sub.ID == channel.ID {
+							slog.Info("sub online", slog.Any("channel", channel.ID), slog.Any("sub", sub.ID))
+						}
 					}
 				}
 			case <-done:
