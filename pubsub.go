@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"io"
+	"iter"
 	"log/slog"
 	"sync"
 	"time"
@@ -213,13 +214,13 @@ func (pipe *Pipe) Cleanup() {
 }
 
 type PubSub interface {
-	GetSubs() []*Sub
-	GetPubs() []*Pub
-	GetChannels() []*Channel
-	GetPipes() []*Pipe
+	GetSubs() iter.Seq[*Sub]
+	GetPubs() iter.Seq[*Pub]
+	GetChannels() iter.Seq[*Channel]
+	GetPipes() iter.Seq[*Pipe]
 	Pipe(pipeClient *PipeClient, pipes []*Pipe) error
 	Sub(sub *Sub, channels []*Channel) error
-	Pub(pub *Pub, channel []*Channel) error
+	Pub(pub *Pub, channels []*Channel) error
 }
 
 type Cfg struct {

@@ -159,14 +159,14 @@ func main() {
 			slog.Info("Debug Info", slog.Int("goroutines", runtime.NumGoroutine()))
 			select {
 			case <-time.After(5 * time.Second):
-				for _, channel := range cfg.PubSub.GetChannels() {
+				for channel := range cfg.PubSub.GetChannels() {
 					slog.Info("channel online", slog.Any("channel", channel.ID))
-					for _, pub := range cfg.PubSub.GetPubs() {
+					for pub := range cfg.PubSub.GetPubs() {
 						if pub.ID == channel.ID {
 							slog.Info("pub online", slog.Any("channel", channel.ID), slog.Any("pub", pub.ID))
 						}
 					}
-					for _, sub := range cfg.PubSub.GetSubs() {
+					for sub := range cfg.PubSub.GetSubs() {
 						if sub.ID == channel.ID {
 							slog.Info("sub online", slog.Any("channel", channel.ID), slog.Any("sub", sub.ID))
 						}

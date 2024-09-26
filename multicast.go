@@ -3,6 +3,7 @@ package pubsub
 import (
 	"errors"
 	"io"
+	"iter"
 	"log/slog"
 	"sync"
 
@@ -87,13 +88,12 @@ func (b *PubSubMulticast) ensurePipe(pipe *Pipe) *Pipe {
 	return dataPipe
 }
 
-func (b *PubSubMulticast) GetPipes() []*Pipe {
-	var pipes []*Pipe
-	b.Pipes.Range(func(I string, J *Pipe) bool {
-		pipes = append(pipes, J)
-		return true
-	})
-	return pipes
+func (b *PubSubMulticast) GetPipes() iter.Seq[*Pipe] {
+	return func(yield func(V *Pipe) bool) {
+		b.Pipes.Range(func(I string, J *Pipe) bool {
+			return yield(J)
+		})
+	}
 }
 
 func (b *PubSubMulticast) Pipe(pipeClient *PipeClient, pipes []*Pipe) error {
@@ -223,40 +223,32 @@ func (b *PubSubMulticast) _pipe(pipe *Pipe, pipeClient *PipeClient) (error, erro
 	return readErr, writeErr
 }
 
-func (b *PubSubMulticast) GetChannels() []*Channel {
-	var chans []*Channel
-	b.Channels.Range(func(I string, J *Channel) bool {
-		chans = append(chans, J)
-		return true
-	})
-	return chans
-}
-
-func (b *PubSubMulticast) GetChannel(channel string) *Channel {
-	channelData, _ := b.Channels.Load(channel)
-	return channelData
-}
-
-func (b *PubSubMulticast) GetPubs() []*Pub {
-	var pubs []*Pub
-	for _, channel := range b.GetChannels() {
-		channel.Pubs.Range(func(K string, V *Pub) bool {
-			pubs = append(pubs, V)
-			return true
+func (b *PubSubMulticast) GetChannels() iter.Seq[*Channel] {
+	return func(yield func(V *Channel) bool) {
+		b.Channels.Range(func(I string, J *Channel) bool {
+			return yield(J)
 		})
 	}
-	return pubs
 }
 
-func (b *PubSubMulticast) GetSubs() []*Sub {
-	var subs []*Sub
-	for _, channel := range b.GetChannels() {
-		channel.Subs.Range(func(K string, V *Sub) bool {
-			subs = append(subs, V)
-			return true
-		})
+func (b *PubSubMulticast) GetPubs() iter.Seq[*Pub] {
+	return func(yield func(*Pub) bool) {
+		for channel := range b.GetChannels() {
+			channel.Pubs.Range(func(K string, V *Pub) bool {
+				return yield(V)
+			})
+		}
 	}
-	return subs
+}
+
+func (b *PubSubMulticast) GetSubs() iter.Seq[*Sub] {
+	return func(yield func(*Sub) bool) {
+		for channel := range b.GetChannels() {
+			channel.Subs.Range(func(K string, V *Sub) bool {
+				return yield(V)
+			})
+		}
+	}
 }
 
 func NewChannel(name string) *Channel {
