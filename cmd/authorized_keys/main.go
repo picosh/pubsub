@@ -37,9 +37,12 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 			cmd := strings.TrimSpace(args[0])
 			channel := args[1]
+
+			channels := strings.Split(channel, ",")
+
 			logger := cfg.Logger.With(
 				"cmd", cmd,
-				"channel", channel,
+				"channel", channels,
 			)
 
 			logger.Info("running cli")
@@ -59,8 +62,13 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					sub.Cleanup()
 				}()
 
-				channel := pubsub.NewChannel(channel)
-				err := cfg.PubSub.Sub(sub, []*pubsub.Channel{channel})
+				var chans []*pubsub.Channel
+
+				for _, c := range channels {
+					chans = append(chans, pubsub.NewChannel(c))
+				}
+
+				err := cfg.PubSub.Sub(sub, chans)
 				if err != nil {
 					logger.Error("error from sub", slog.Any("error", err), slog.String("sub", sub.ID))
 				}
@@ -76,8 +84,13 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					pub.Cleanup()
 				}()
 
-				channel := pubsub.NewChannel(channel)
-				err := cfg.PubSub.Pub(pub, []*pubsub.Channel{channel})
+				var chans []*pubsub.Channel
+
+				for _, c := range channels {
+					chans = append(chans, pubsub.NewChannel(c))
+				}
+
+				err := cfg.PubSub.Pub(pub, chans)
 				if err != nil {
 					logger.Error("error from pub", slog.Any("error", err), slog.String("pub", pub.ID))
 				}
@@ -95,8 +108,13 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					pipeClient.Cleanup()
 				}()
 
-				pipe := pubsub.NewPipe(channel)
-				err := cfg.PubSub.Pipe(pipeClient, []*pubsub.Pipe{pipe})
+				var chans []*pubsub.Pipe
+
+				for _, c := range channels {
+					chans = append(chans, pubsub.NewPipe(c))
+				}
+
+				err := cfg.PubSub.Pipe(pipeClient, chans)
 				if err != nil {
 					logger.Error(
 						"pipe error",
@@ -159,17 +177,19 @@ func main() {
 			slog.Info("Debug Info", slog.Int("goroutines", runtime.NumGoroutine()))
 			select {
 			case <-time.After(5 * time.Second):
-				for channel := range cfg.PubSub.GetChannels() {
+				for _, channel := range cfg.PubSub.GetChannels() {
 					slog.Info("channel online", slog.Any("channel", channel.ID))
-					for pub := range cfg.PubSub.GetPubs() {
-						if pub.ID == channel.ID {
-							slog.Info("pub online", slog.Any("channel", channel.ID), slog.Any("pub", pub.ID))
-						}
+					for _, pub := range channel.GetPubs() {
+						slog.Info("pub online", slog.Any("channel", channel.ID), slog.Any("pub", pub.ID))
 					}
-					for sub := range cfg.PubSub.GetSubs() {
-						if sub.ID == channel.ID {
-							slog.Info("sub online", slog.Any("channel", channel.ID), slog.Any("sub", sub.ID))
-						}
+					for _, sub := range channel.GetSubs() {
+						slog.Info("sub online", slog.Any("channel", channel.ID), slog.Any("sub", sub.ID))
+					}
+				}
+				for _, pipe := range cfg.PubSub.GetPipes() {
+					slog.Info("pipe online", slog.Any("pipe", pipe.ID))
+					for _, pipeClient := range pipe.GetPipeClients() {
+						slog.Info("pipeClient online", slog.Any("pipe", pipe.ID), slog.Any("pipeClient", pipeClient.ID))
 					}
 				}
 			case <-done:

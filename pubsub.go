@@ -92,6 +92,14 @@ func (c *Channel) Handle() {
 	})
 }
 
+func (c *Channel) GetSubs() iter.Seq2[string, *Sub] {
+	return c.Subs.Range
+}
+
+func (c *Channel) GetPubs() iter.Seq2[string, *Pub] {
+	return c.Pubs.Range
+}
+
 type Sub struct {
 	ID       string
 	Done     chan struct{}
@@ -206,6 +214,10 @@ func (pipe *Pipe) Handle() {
 	})
 }
 
+func (p *Pipe) GetPipeClients() iter.Seq2[string, *PipeClient] {
+	return p.Clients.Range
+}
+
 func (pipe *Pipe) Cleanup() {
 	pipe.cleanupOnce.Do(func() {
 		close(pipe.Done)
@@ -214,10 +226,11 @@ func (pipe *Pipe) Cleanup() {
 }
 
 type PubSub interface {
-	GetSubs() iter.Seq[*Sub]
-	GetPubs() iter.Seq[*Pub]
-	GetChannels() iter.Seq[*Channel]
-	GetPipes() iter.Seq[*Pipe]
+	GetChannels() iter.Seq2[string, *Channel]
+	GetPipes() iter.Seq2[string, *Pipe]
+	GetSubs() iter.Seq2[string, *Sub]
+	GetPubs() iter.Seq2[string, *Pub]
+	GetPipeClients() iter.Seq2[string, *PipeClient]
 	Pipe(pipeClient *PipeClient, pipes []*Pipe) error
 	Sub(sub *Sub, channels []*Channel) error
 	Pub(pub *Pub, channels []*Channel) error
