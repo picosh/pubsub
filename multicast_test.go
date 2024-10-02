@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -40,8 +41,10 @@ func TestMulticastSubBlock(t *testing.T) {
 	syncer := make(chan int)
 
 	cast := &PubSubMulticast{
-		Logger:   slog.Default(),
-		Channels: syncmap.New[string, *Channel](),
+		Logger: slog.Default(),
+		BaseConnector: &BaseConnector{
+			Channels: syncmap.New[string, *Channel](),
+		},
 	}
 
 	var wg sync.WaitGroup
@@ -50,19 +53,17 @@ func TestMulticastSubBlock(t *testing.T) {
 	channel := NewChannel(name)
 
 	go func() {
-		client := NewClient("1", actual, ChannelDirectionOutput, true, false)
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Connect(client, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "1", actual, []*Channel{channel}))
 		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		client := NewClient("2", &Buffer{b: *bytes.NewBufferString(expected)}, ChannelDirectionInput, true, false)
 		orderActual += "pub-"
-		fmt.Println(cast.Connect(client, []*Channel{channel}))
+		fmt.Println(cast.Pub(context.TODO(), "2", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}))
 		wg.Done()
 	}()
 
@@ -85,8 +86,10 @@ func TestMulticastPubBlock(t *testing.T) {
 	syncer := make(chan int)
 
 	cast := &PubSubMulticast{
-		Logger:   slog.Default(),
-		Channels: syncmap.New[string, *Channel](),
+		Logger: slog.Default(),
+		BaseConnector: &BaseConnector{
+			Channels: syncmap.New[string, *Channel](),
+		},
 	}
 
 	var wg sync.WaitGroup
@@ -95,20 +98,18 @@ func TestMulticastPubBlock(t *testing.T) {
 	channel := NewChannel(name)
 
 	go func() {
-		client := NewClient("1", &Buffer{b: *bytes.NewBufferString(expected)}, ChannelDirectionInput, true, false)
 		orderActual += "pub-"
 		syncer <- 0
-		fmt.Println(cast.Connect(client, []*Channel{channel}))
+		fmt.Println(cast.Pub(context.TODO(), "1", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}))
 		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		client := NewClient("2", actual, ChannelDirectionOutput, true, false)
 		orderActual += "sub-"
 		wg.Done()
-		fmt.Println(cast.Connect(client, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "2", actual, []*Channel{channel}))
 	}()
 
 	wg.Wait()
@@ -131,8 +132,10 @@ func TestMulticastMultSubs(t *testing.T) {
 	syncer := make(chan int)
 
 	cast := &PubSubMulticast{
-		Logger:   slog.Default(),
-		Channels: syncmap.New[string, *Channel](),
+		Logger: slog.Default(),
+		BaseConnector: &BaseConnector{
+			Channels: syncmap.New[string, *Channel](),
+		},
 	}
 
 	var wg sync.WaitGroup
@@ -141,29 +144,26 @@ func TestMulticastMultSubs(t *testing.T) {
 	channel := NewChannel(name)
 
 	go func() {
-		client := NewClient("1", actual, ChannelDirectionOutput, true, false)
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Connect(client, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "1", actual, []*Channel{channel}))
 		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		client := NewClient("2", actualOther, ChannelDirectionOutput, true, false)
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Connect(client, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "2", actualOther, []*Channel{channel}))
 		wg.Done()
 	}()
 
 	<-syncer
 
 	go func() {
-		client := NewClient("3", &Buffer{b: *bytes.NewBufferString(expected)}, ChannelDirectionInput, true, false)
 		orderActual += "pub-"
-		fmt.Println(cast.Connect(client, []*Channel{channel}))
+		fmt.Println(cast.Pub(context.TODO(), "3", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}))
 		wg.Done()
 	}()
 

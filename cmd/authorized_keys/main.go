@@ -51,61 +51,46 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 			if cmd == "help" {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
 			} else if cmd == "sub" {
-				client := pubsub.NewClient(uuid.NewString(), sesh, pubsub.ChannelDirectionOutput, true, false)
-
-				go func() {
-					<-sesh.Context().Done()
-					client.Cleanup()
-				}()
-
 				var chans []*pubsub.Channel
 
 				for _, c := range channels {
 					chans = append(chans, pubsub.NewChannel(c))
 				}
 
-				err := errors.Join(cfg.PubSub.Connect(client, chans))
+				clientID := uuid.NewString()
+
+				err := errors.Join(cfg.PubSub.Sub(sesh.Context(), clientID, sesh, chans))
 				if err != nil {
-					logger.Error("error during sub", slog.Any("error", err), slog.String("client", client.ID))
+					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
 			} else if cmd == "pub" {
-				client := pubsub.NewClient(uuid.NewString(), sesh, pubsub.ChannelDirectionInput, true, false)
-
-				go func() {
-					<-sesh.Context().Done()
-					client.Cleanup()
-				}()
-
 				var chans []*pubsub.Channel
 
 				for _, c := range channels {
 					chans = append(chans, pubsub.NewChannel(c))
 				}
 
-				err := errors.Join(cfg.PubSub.Connect(client, chans))
+				clientID := uuid.NewString()
+
+				err := errors.Join(cfg.PubSub.Pub(sesh.Context(), clientID, sesh, chans))
 				if err != nil {
-					logger.Error("error during pub", slog.Any("error", err), slog.String("client", client.ID))
+					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
 			} else if cmd == "pipe" {
-				client := pubsub.NewClient(uuid.NewString(), sesh, pubsub.ChannelDirectionInputOutput, false, args[len(args)-1] == "replay")
-
-				go func() {
-					<-sesh.Context().Done()
-					client.Cleanup()
-				}()
-
 				var chans []*pubsub.Channel
 
 				for _, c := range channels {
 					chans = append(chans, pubsub.NewChannel(c))
 				}
 
-				err := errors.Join(cfg.PubSub.Connect(client, chans))
+				clientID := uuid.NewString()
+
+				err := errors.Join(cfg.PubSub.Pipe(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "replay"))
 				if err != nil {
 					logger.Error(
 						"pipe error",
 						slog.Any("error", err),
-						slog.String("pipeClient", client.ID),
+						slog.String("pipeClient", clientID),
 					)
 				}
 			} else {
@@ -125,8 +110,10 @@ func main() {
 	cfg := &pubsub.Cfg{
 		Logger: logger,
 		PubSub: &pubsub.PubSubMulticast{
-			Logger:   logger,
-			Channels: syncmap.New[string, *pubsub.Channel](),
+			Logger: logger,
+			BaseConnector: &pubsub.BaseConnector{
+				Channels: syncmap.New[string, *pubsub.Channel](),
+			},
 		},
 	}
 
