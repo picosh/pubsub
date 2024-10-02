@@ -60,7 +60,7 @@ func TestMulticastSubBlock(t *testing.T) {
 	<-syncer
 
 	go func() {
-		client := NewClient("1", bytes.NewBufferString(expected), ChannelDirectionInput, true, false)
+		client := NewClient("2", &Buffer{b: *bytes.NewBufferString(expected)}, ChannelDirectionInput, true, false)
 		orderActual += "pub-"
 		fmt.Println(cast.Connect(client, []*Channel{channel}))
 		wg.Done()
@@ -95,7 +95,7 @@ func TestMulticastPubBlock(t *testing.T) {
 	channel := NewChannel(name)
 
 	go func() {
-		client := NewClient("1", bytes.NewBufferString(expected), ChannelDirectionInput, true, false)
+		client := NewClient("1", &Buffer{b: *bytes.NewBufferString(expected)}, ChannelDirectionInput, true, false)
 		orderActual += "pub-"
 		syncer <- 0
 		fmt.Println(cast.Connect(client, []*Channel{channel}))
@@ -105,7 +105,7 @@ func TestMulticastPubBlock(t *testing.T) {
 	<-syncer
 
 	go func() {
-		client := NewClient("1", actual, ChannelDirectionOutput, true, false)
+		client := NewClient("2", actual, ChannelDirectionOutput, true, false)
 		orderActual += "sub-"
 		wg.Done()
 		fmt.Println(cast.Connect(client, []*Channel{channel}))
@@ -161,7 +161,7 @@ func TestMulticastMultSubs(t *testing.T) {
 	<-syncer
 
 	go func() {
-		client := NewClient("1", bytes.NewBufferString(expected), ChannelDirectionInput, true, false)
+		client := NewClient("3", &Buffer{b: *bytes.NewBufferString(expected)}, ChannelDirectionInput, true, false)
 		orderActual += "pub-"
 		fmt.Println(cast.Connect(client, []*Channel{channel}))
 		wg.Done()
