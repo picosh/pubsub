@@ -53,7 +53,6 @@ type Channel struct {
 	Clients     *syncmap.Map[string, *Client]
 	handleOnce  sync.Once
 	cleanupOnce sync.Once
-	onceData    sync.Once
 }
 
 func (c *Channel) GetClients() iter.Seq2[string, *Client] {

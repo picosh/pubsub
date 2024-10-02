@@ -16,7 +16,6 @@ func NewClient(ID string, rw io.ReadWriter, direction ChannelDirection, blockWri
 		Channels:   syncmap.New[string, *Channel](),
 		Done:       make(chan struct{}),
 		Data:       make(chan ChannelMessage),
-		Error:      make(chan error),
 		Replay:     replay,
 		BlockWrite: blockWrite,
 	}
@@ -29,13 +28,10 @@ type Client struct {
 	Direction  ChannelDirection
 	Done       chan struct{}
 	Data       chan ChannelMessage
-	Error      chan error
 	Replay     bool
 	BlockWrite bool
 	once       sync.Once
 	onceData   sync.Once
-	onceError  sync.Once
-	onceRead   sync.Once
 }
 
 func (c *Client) GetChannels() iter.Seq2[string, *Channel] {
