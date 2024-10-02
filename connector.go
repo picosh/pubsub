@@ -186,3 +186,5 @@ func (b *BaseConnector) ensureChannel(channel *Channel) *Channel {
 	dataChannel.Handle()
 	return dataChannel
 }
+
+var _ Connector = (*BaseConnector)(nil)

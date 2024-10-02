@@ -111,7 +111,7 @@ func main() {
 		Logger: logger,
 		PubSub: &pubsub.PubSubMulticast{
 			Logger: logger,
-			BaseConnector: &pubsub.BaseConnector{
+			Connector: &pubsub.BaseConnector{
 				Channels: syncmap.New[string, *pubsub.Channel](),
 			},
 		},

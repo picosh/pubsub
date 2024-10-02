@@ -9,7 +9,7 @@ import (
 )
 
 type PubSubMulticast struct {
-	*BaseConnector
+	Connector
 	Logger *slog.Logger
 }
 
@@ -58,5 +58,4 @@ func (p *PubSubMulticast) Sub(ctx context.Context, ID string, rw io.ReadWriter, 
 	return errors.Join(p.connect(ctx, ID, rw, channels, ChannelDirectionOutput, false, false))
 }
 
-var _ PubSub = &PubSubMulticast{}
 var _ PubSub = (*PubSubMulticast)(nil)

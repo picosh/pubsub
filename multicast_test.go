@@ -42,7 +42,7 @@ func TestMulticastSubBlock(t *testing.T) {
 
 	cast := &PubSubMulticast{
 		Logger: slog.Default(),
-		BaseConnector: &BaseConnector{
+		Connector: &BaseConnector{
 			Channels: syncmap.New[string, *Channel](),
 		},
 	}
@@ -87,7 +87,7 @@ func TestMulticastPubBlock(t *testing.T) {
 
 	cast := &PubSubMulticast{
 		Logger: slog.Default(),
-		BaseConnector: &BaseConnector{
+		Connector: &BaseConnector{
 			Channels: syncmap.New[string, *Channel](),
 		},
 	}
@@ -133,7 +133,7 @@ func TestMulticastMultSubs(t *testing.T) {
 
 	cast := &PubSubMulticast{
 		Logger: slog.Default(),
-		BaseConnector: &BaseConnector{
+		Connector: &BaseConnector{
 			Channels: syncmap.New[string, *Channel](),
 		},
 	}
