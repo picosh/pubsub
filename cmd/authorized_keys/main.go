@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -37,9 +38,12 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 			cmd := strings.TrimSpace(args[0])
 			channel := args[1]
+
+			channels := strings.Split(channel, ",")
+
 			logger := cfg.Logger.With(
 				"cmd", cmd,
-				"channel", channel,
+				"channel", channels,
 			)
 
 			logger.Info("running cli")
@@ -47,58 +51,47 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 			if cmd == "help" {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
 			} else if cmd == "sub" {
-				sub := &pubsub.Sub{
-					ID:     uuid.NewString(),
-					Writer: sesh,
-					Done:   make(chan struct{}),
-					Data:   make(chan []byte),
+				var chans []*pubsub.Channel
+
+				for _, c := range channels {
+					chans = append(chans, pubsub.NewChannel(c))
 				}
 
-				go func() {
-					<-sesh.Context().Done()
-					sub.Cleanup()
-				}()
+				clientID := uuid.NewString()
 
-				err := cfg.PubSub.Sub(channel, sub)
+				err := errors.Join(cfg.PubSub.Sub(sesh.Context(), clientID, sesh, chans))
 				if err != nil {
-					logger.Error("error from sub", slog.Any("error", err), slog.String("sub", sub.ID))
+					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
 			} else if cmd == "pub" {
-				pub := &pubsub.Pub{
-					ID:     uuid.NewString(),
-					Done:   make(chan struct{}),
-					Reader: sesh,
+				var chans []*pubsub.Channel
+
+				for _, c := range channels {
+					chans = append(chans, pubsub.NewChannel(c))
 				}
 
-				go func() {
-					<-sesh.Context().Done()
-					pub.Cleanup()
-				}()
+				clientID := uuid.NewString()
 
-				err := cfg.PubSub.Pub(channel, pub)
+				err := errors.Join(cfg.PubSub.Pub(sesh.Context(), clientID, sesh, chans))
 				if err != nil {
-					logger.Error("error from pub", slog.Any("error", err), slog.String("pub", pub.ID))
+					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
 			} else if cmd == "pipe" {
-				pipeClient := &pubsub.PipeClient{
-					ID:         uuid.NewString(),
-					Done:       make(chan struct{}),
-					Data:       make(chan pubsub.PipeMessage),
-					Replay:     args[len(args)-1] == "replay",
-					ReadWriter: sesh,
+				var chans []*pubsub.Channel
+
+				for _, c := range channels {
+					chans = append(chans, pubsub.NewChannel(c))
 				}
 
-				go func() {
-					<-sesh.Context().Done()
-					pipeClient.Cleanup()
-				}()
+				clientID := uuid.NewString()
 
-				readErr, writeErr := cfg.PubSub.Pipe(channel, pipeClient)
-				if readErr != nil {
-					logger.Error("error reading from pipe", slog.Any("error", readErr), slog.String("pipeClient", pipeClient.ID))
-				}
-				if writeErr != nil {
-					logger.Error("error writing to pipe", slog.Any("error", writeErr), slog.String("pipeClient", pipeClient.ID))
+				err := errors.Join(cfg.PubSub.Pipe(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "replay"))
+				if err != nil {
+					logger.Error(
+						"pipe error",
+						slog.Any("error", err),
+						slog.String("pipeClient", clientID),
+					)
 				}
 			} else {
 				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
@@ -117,9 +110,10 @@ func main() {
 	cfg := &pubsub.Cfg{
 		Logger: logger,
 		PubSub: &pubsub.PubSubMulticast{
-			Logger:   logger,
-			Channels: syncmap.New[string, *pubsub.Channel](),
-			Pipes:    syncmap.New[string, *pubsub.Pipe](),
+			Logger: logger,
+			Connector: &pubsub.BaseConnector{
+				Channels: syncmap.New[string, *pubsub.Channel](),
+			},
 		},
 	}
 
@@ -155,13 +149,10 @@ func main() {
 			slog.Info("Debug Info", slog.Int("goroutines", runtime.NumGoroutine()))
 			select {
 			case <-time.After(5 * time.Second):
-				for _, channel := range cfg.PubSub.GetChannels("") {
-					slog.Info("channel online", slog.Any("channel", channel.Name))
-					for _, pub := range cfg.PubSub.GetPubs(channel.Name) {
-						slog.Info("pub online", slog.Any("channel", channel.Name), slog.Any("pub", pub.ID))
-					}
-					for _, sub := range cfg.PubSub.GetSubs(channel.Name) {
-						slog.Info("sub online", slog.Any("channel", channel.Name), slog.Any("sub", sub.ID))
+				for _, channel := range cfg.PubSub.GetChannels() {
+					slog.Info("channel online", slog.Any("channel", channel.ID))
+					for _, client := range channel.GetClients() {
+						slog.Info("client online", slog.Any("channel", channel.ID), slog.Any("client", client.ID), slog.String("direction", client.Direction.String()))
 					}
 				}
 			case <-done:

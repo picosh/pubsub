@@ -1,8 +1,9 @@
 module github.com/picosh/pubsub
 
-go 1.22.6
+go 1.23.1
 
 require (
+	github.com/antoniomika/syncmap v1.0.0
 	github.com/charmbracelet/ssh v0.0.0-20240725163421-eb71b85b27aa
 	github.com/charmbracelet/wish v1.4.2
 	github.com/google/uuid v1.6.0
@@ -10,7 +11,6 @@ require (
 
 require (
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
-	github.com/antoniomika/syncmap v1.0.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/bubbletea v0.27.0 // indirect
 	github.com/charmbracelet/keygen v0.5.1 // indirect

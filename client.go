@@ -1,0 +1,45 @@
+package pubsub
+
+import (
+	"io"
+	"iter"
+	"sync"
+
+	"github.com/antoniomika/syncmap"
+)
+
+func NewClient(ID string, rw io.ReadWriter, direction ChannelDirection, blockWrite, replay bool) *Client {
+	return &Client{
+		ID:         ID,
+		ReadWriter: rw,
+		Direction:  direction,
+		Channels:   syncmap.New[string, *Channel](),
+		Done:       make(chan struct{}),
+		Data:       make(chan ChannelMessage),
+		Replay:     replay,
+		BlockWrite: blockWrite,
+	}
+}
+
+type Client struct {
+	ID         string
+	ReadWriter io.ReadWriter
+	Channels   *syncmap.Map[string, *Channel]
+	Direction  ChannelDirection
+	Done       chan struct{}
+	Data       chan ChannelMessage
+	Replay     bool
+	BlockWrite bool
+	once       sync.Once
+	onceData   sync.Once
+}
+
+func (c *Client) GetChannels() iter.Seq2[string, *Channel] {
+	return c.Channels.Range
+}
+
+func (c *Client) Cleanup() {
+	c.once.Do(func() {
+		close(c.Done)
+	})
+}
