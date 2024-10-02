@@ -8,7 +8,7 @@ import (
 	"github.com/antoniomika/syncmap"
 )
 
-func NewClient(ID string, rw io.ReadWriter, direction ChannelDirection, blockWrite, replay bool) *Client {
+func NewClient(ID string, rw io.ReadWriter, direction ChannelDirection, blockWrite, replay, keepAlive bool) *Client {
 	return &Client{
 		ID:         ID,
 		ReadWriter: rw,
@@ -18,6 +18,7 @@ func NewClient(ID string, rw io.ReadWriter, direction ChannelDirection, blockWri
 		Data:       make(chan ChannelMessage),
 		Replay:     replay,
 		BlockWrite: blockWrite,
+		KeepAlive:  keepAlive,
 	}
 }
 
@@ -30,6 +31,7 @@ type Client struct {
 	Data       chan ChannelMessage
 	Replay     bool
 	BlockWrite bool
+	KeepAlive  bool
 	once       sync.Once
 	onceData   sync.Once
 }

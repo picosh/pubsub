@@ -59,7 +59,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 				clientID := uuid.NewString()
 
-				err := errors.Join(cfg.PubSub.Sub(sesh.Context(), clientID, sesh, chans))
+				err := errors.Join(cfg.PubSub.Sub(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "keepalive"))
 				if err != nil {
 					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}

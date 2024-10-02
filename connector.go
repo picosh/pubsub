@@ -72,7 +72,9 @@ func (b *BaseConnector) Connect(client *Client, channels []*Channel) (error, err
 
 			if count == 0 {
 				for _, cl := range dataChannel.GetClients() {
-					cl.Cleanup()
+					if !cl.KeepAlive {
+						cl.Cleanup()
+					}
 				}
 			}
 

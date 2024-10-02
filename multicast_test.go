@@ -55,7 +55,7 @@ func TestMulticastSubBlock(t *testing.T) {
 	go func() {
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Sub(context.TODO(), "1", actual, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "1", actual, []*Channel{channel}, false))
 		wg.Done()
 	}()
 
@@ -109,7 +109,7 @@ func TestMulticastPubBlock(t *testing.T) {
 	go func() {
 		orderActual += "sub-"
 		wg.Done()
-		fmt.Println(cast.Sub(context.TODO(), "2", actual, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "2", actual, []*Channel{channel}, false))
 	}()
 
 	wg.Wait()
@@ -146,7 +146,7 @@ func TestMulticastMultSubs(t *testing.T) {
 	go func() {
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Sub(context.TODO(), "1", actual, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "1", actual, []*Channel{channel}, false))
 		wg.Done()
 	}()
 
@@ -155,7 +155,7 @@ func TestMulticastMultSubs(t *testing.T) {
 	go func() {
 		orderActual += "sub-"
 		syncer <- 0
-		fmt.Println(cast.Sub(context.TODO(), "2", actualOther, []*Channel{channel}))
+		fmt.Println(cast.Sub(context.TODO(), "2", actualOther, []*Channel{channel}, false))
 		wg.Done()
 	}()
 
