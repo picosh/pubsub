@@ -58,7 +58,7 @@ func (b *PubSubMulticast) Connect(client *Client, channels []*Channel) (error, e
 
 			count := 0
 			for _, cl := range dataChannel.GetClients() {
-				if cl.Direction == ChannelDirectionInput {
+				if cl.Direction == ChannelDirectionInput || cl.Direction == ChannelDirectionInputOutput {
 					count++
 				}
 			}
@@ -96,8 +96,6 @@ func (b *PubSubMulticast) Connect(client *Client, channels []*Channel) (error, e
 					Direction: ChannelDirectionInput,
 				}
 
-				slog.Info("SENDING DATA", slog.Any("data", channelMessage))
-
 				if client.BlockWrite {
 					for {
 						count := 0
@@ -122,21 +120,26 @@ func (b *PubSubMulticast) Connect(client *Client, channels []*Channel) (error, e
 					}
 				}
 
+				var sendwg sync.WaitGroup
+
 				for _, channel := range client.GetChannels() {
-					select {
-					case channel.Data <- channelMessage:
-						slog.Info("DATA SENT", slog.Any("data", channelMessage), slog.String("channel", channel.ID))
-					case <-client.Done:
-					case <-channel.Done:
-					}
+					sendwg.Add(1)
+					go func() {
+						defer sendwg.Done()
+						select {
+						case channel.Data <- channelMessage:
+						case <-client.Done:
+						case <-channel.Done:
+						}
+					}()
 				}
+
+				sendwg.Wait()
 
 				if err != nil {
 					if errors.Is(err, io.EOF) {
 						return
 					}
-
-					slog.Error("error reading from client", slog.String("client", client.ID), slog.Any("channel", channels), slog.Any("error", err))
 					inputErr = err
 					return
 				}
@@ -151,16 +154,12 @@ func (b *PubSubMulticast) Connect(client *Client, channels []*Channel) (error, e
 			defer wg.Done()
 		mainLoop:
 			for {
-				slog.Info("STARTING OUTPUT LOOP")
 				select {
 				case data, ok := <-client.Data:
-					slog.Info("RECEIVED DATA", slog.Any("data", data), slog.Bool("ok", ok))
-
 					_, err := client.ReadWriter.Write(data.Data)
 					if err != nil {
-						slog.Error("error writing to client", slog.String("client", client.ID), slog.Any("chanel", channels), slog.Any("error", err))
 						outputErr = err
-						return
+						break mainLoop
 					}
 
 					if !ok {

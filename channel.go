@@ -80,8 +80,15 @@ func (c *Channel) Handle() {
 				case <-c.Done:
 					return
 				case data, ok := <-c.Data:
+					var wg sync.WaitGroup
 					for _, client := range c.GetClients() {
+						if client.Direction == ChannelDirectionInput || (client.ID == data.ClientID && !client.Replay) {
+							continue
+						}
+
+						wg.Add(1)
 						go func() {
+							defer wg.Done()
 							if !ok {
 								client.onceData.Do(func() {
 									close(client.Data)
@@ -96,6 +103,7 @@ func (c *Channel) Handle() {
 							}
 						}()
 					}
+					wg.Wait()
 				}
 			}
 		}()
