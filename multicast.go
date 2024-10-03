@@ -81,4 +81,4 @@ func (p *Multicast) Sub(ctx context.Context, ID string, rw io.ReadWriter, channe
 	return errors.Join(p.connect(ctx, ID, rw, channels, ChannelDirectionOutput, false, false, keepAlive))
 }
 
-var _ = (*Multicast)(nil)
+var _ PubSub = (*Multicast)(nil)
