@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/antoniomika/syncmap"
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/google/uuid"
@@ -26,7 +25,7 @@ func GetEnv(key string, defaultVal string) string {
 	return defaultVal
 }
 
-func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
+func PubSubMiddleware(broker pubsub.PubSub, logger *slog.Logger) wish.Middleware {
 	return func(next ssh.Handler) ssh.Handler {
 		return func(sesh ssh.Session) {
 			args := sesh.Command()
@@ -41,7 +40,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 			topics := strings.Split(topicsRaw, ",")
 
-			logger := cfg.Logger.With(
+			logger := logger.With(
 				"cmd", cmd,
 				"topics", topics,
 			)
@@ -59,7 +58,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 				clientID := uuid.NewString()
 
-				err := errors.Join(cfg.PubSub.Sub(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "keepalive"))
+				err := errors.Join(broker.Sub(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "keepalive"))
 				if err != nil {
 					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
@@ -72,7 +71,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 				clientID := uuid.NewString()
 
-				err := errors.Join(cfg.PubSub.Pub(sesh.Context(), clientID, sesh, chans))
+				err := errors.Join(broker.Pub(sesh.Context(), clientID, sesh, chans))
 				if err != nil {
 					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
@@ -85,7 +84,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 
 				clientID := uuid.NewString()
 
-				err := errors.Join(cfg.PubSub.Pipe(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "replay"))
+				err := errors.Join(broker.Pipe(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "replay"))
 				if err != nil {
 					logger.Error(
 						"pipe error",
@@ -107,15 +106,7 @@ func main() {
 	host := GetEnv("SSH_HOST", "0.0.0.0")
 	port := GetEnv("SSH_PORT", "2222")
 	keyPath := GetEnv("SSH_AUTHORIZED_KEYS", "./ssh_data/authorized_keys")
-	cfg := &pubsub.Cfg{
-		Logger: logger,
-		PubSub: pubsub.NewMulticast(
-			&pubsub.BaseBroker{
-				Channels: syncmap.New[string, *pubsub.Channel](),
-			},
-			logger,
-		),
-	}
+	broker := pubsub.NewMulticast(logger)
 
 	s, err := wish.NewServer(
 		ssh.NoPty(),
@@ -123,7 +114,7 @@ func main() {
 		wish.WithHostKeyPath("ssh_data/term_info_ed25519"),
 		wish.WithAuthorizedKeys(keyPath),
 		wish.WithMiddleware(
-			PubSubMiddleware(cfg),
+			PubSubMiddleware(broker, logger),
 		),
 	)
 	if err != nil {
@@ -149,7 +140,7 @@ func main() {
 			slog.Info("Debug Info", slog.Int("goroutines", runtime.NumGoroutine()))
 			select {
 			case <-time.After(5 * time.Second):
-				for _, channel := range cfg.PubSub.GetChannels() {
+				for _, channel := range broker.GetChannels() {
 					slog.Info("channel online", slog.Any("channel topic", channel.Topic))
 					for _, client := range channel.GetClients() {
 						slog.Info("client online", slog.Any("channel topic", channel.Topic), slog.Any("client", client.ID), slog.String("direction", client.Direction.String()))

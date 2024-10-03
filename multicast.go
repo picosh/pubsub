@@ -6,6 +6,8 @@ import (
 	"io"
 	"iter"
 	"log/slog"
+
+	"github.com/antoniomika/syncmap"
 )
 
 type Multicast struct {
@@ -13,10 +15,12 @@ type Multicast struct {
 	Logger *slog.Logger
 }
 
-func NewMulticast(broker Broker, logger *slog.Logger) *Multicast {
+func NewMulticast(logger *slog.Logger) *Multicast {
 	return &Multicast{
-		Broker: broker,
 		Logger: logger,
+		Broker: &BaseBroker{
+			Channels: syncmap.New[string, *Channel](),
+		},
 	}
 }
 
