@@ -22,6 +22,11 @@ func NewClient(ID string, rw io.ReadWriter, direction ChannelDirection, blockWri
 	}
 }
 
+/*
+Client is the container for holding state between multiple devices.  A
+client has a direction (input, output, inputout) as well as a way to
+send data to all the associated channels.
+*/
 type Client struct {
 	ID         string
 	ReadWriter io.ReadWriter

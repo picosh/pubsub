@@ -46,6 +46,10 @@ func NewChannel(topic string) *Channel {
 	}
 }
 
+/*
+Channel is a container for a topic.  It holds the list of clients and
+a data channel to receive a message.
+*/
 type Channel struct {
 	Topic       string
 	Done        chan struct{}

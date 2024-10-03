@@ -6,6 +6,13 @@ import (
 	"iter"
 )
 
+/*
+PubSub is our take on a basic publisher and subscriber interface.
+
+It has a few notable requirements:
+- each operation must accept an array of channels
+- some way to send, receive, and stream data between clients
+*/
 type PubSub interface {
 	Broker
 	GetPubs() iter.Seq2[string, *Client]

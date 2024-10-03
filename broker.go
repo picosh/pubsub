@@ -10,6 +10,12 @@ import (
 	"github.com/antoniomika/syncmap"
 )
 
+/*
+Broker receives published messages and dispatches the message to the
+subscribing clients. An message contains a message topic that clients
+subscribe to and brokers use these subscription lists for determining the
+clients to receive the message.
+*/
 type Broker interface {
 	GetChannels() iter.Seq2[string, *Channel]
 	GetClients() iter.Seq2[string, *Client]

@@ -10,6 +10,17 @@ import (
 	"github.com/antoniomika/syncmap"
 )
 
+/*
+Multicast is a flexible, bidirectional broker.
+
+It provides the most pure version of our PubSub interface which lets
+end-developers build one-to-many connections between publishers and
+subscribers and vice versa.
+
+It doesn't provide any topic filtering capabilities and is only
+concerned with sending data to and from an `io.ReadWriter` via our
+channels.
+*/
 type Multicast struct {
 	Broker
 	Logger *slog.Logger
