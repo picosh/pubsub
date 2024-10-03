@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
-
-	"github.com/antoniomika/syncmap"
 )
 
 type Buffer struct {
@@ -40,12 +38,7 @@ func TestMulticastSubBlock(t *testing.T) {
 	name := "test-channel"
 	syncer := make(chan int)
 
-	cast := &Multicast{
-		Logger: slog.Default(),
-		Broker: &BaseBroker{
-			Channels: syncmap.New[string, *Channel](),
-		},
-	}
+	cast := NewMulticast(slog.Default())
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -63,7 +56,7 @@ func TestMulticastSubBlock(t *testing.T) {
 
 	go func() {
 		orderActual += "pub-"
-		fmt.Println(cast.Pub(context.TODO(), "2", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}))
+		fmt.Println(cast.Pub(context.TODO(), "2", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}, true))
 		wg.Done()
 	}()
 
@@ -85,12 +78,7 @@ func TestMulticastPubBlock(t *testing.T) {
 	name := "test-channel"
 	syncer := make(chan int)
 
-	cast := &Multicast{
-		Logger: slog.Default(),
-		Broker: &BaseBroker{
-			Channels: syncmap.New[string, *Channel](),
-		},
-	}
+	cast := NewMulticast(slog.Default())
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -100,7 +88,7 @@ func TestMulticastPubBlock(t *testing.T) {
 	go func() {
 		orderActual += "pub-"
 		syncer <- 0
-		fmt.Println(cast.Pub(context.TODO(), "1", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}))
+		fmt.Println(cast.Pub(context.TODO(), "1", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}, true))
 		wg.Done()
 	}()
 
@@ -131,12 +119,7 @@ func TestMulticastMultSubs(t *testing.T) {
 	name := "test-channel"
 	syncer := make(chan int)
 
-	cast := &Multicast{
-		Logger: slog.Default(),
-		Broker: &BaseBroker{
-			Channels: syncmap.New[string, *Channel](),
-		},
-	}
+	cast := NewMulticast(slog.Default())
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -163,7 +146,7 @@ func TestMulticastMultSubs(t *testing.T) {
 
 	go func() {
 		orderActual += "pub-"
-		fmt.Println(cast.Pub(context.TODO(), "3", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}))
+		fmt.Println(cast.Pub(context.TODO(), "3", &Buffer{b: *bytes.NewBufferString(expected)}, []*Channel{channel}, true))
 		wg.Done()
 	}()
 

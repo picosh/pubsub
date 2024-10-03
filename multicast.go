@@ -31,6 +31,7 @@ func NewMulticast(logger *slog.Logger) *Multicast {
 		Logger: logger,
 		Broker: &BaseBroker{
 			Channels: syncmap.New[string, *Channel](),
+			Logger:   logger.With(slog.Bool("broker", true)),
 		},
 	}
 }
@@ -72,8 +73,8 @@ func (p *Multicast) Pipe(ctx context.Context, ID string, rw io.ReadWriter, chann
 	return p.connect(ctx, ID, rw, channels, ChannelDirectionInputOutput, false, replay, false)
 }
 
-func (p *Multicast) Pub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel) error {
-	return errors.Join(p.connect(ctx, ID, rw, channels, ChannelDirectionInput, true, false, false))
+func (p *Multicast) Pub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, blockWrite bool) error {
+	return errors.Join(p.connect(ctx, ID, rw, channels, ChannelDirectionInput, blockWrite, false, false))
 }
 
 func (p *Multicast) Sub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, keepAlive bool) error {

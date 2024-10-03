@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"iter"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ type Broker interface {
 
 type BaseBroker struct {
 	Channels *syncmap.Map[string, *Channel]
+	Logger   *slog.Logger
 }
 
 func (b *BaseBroker) Cleanup() {

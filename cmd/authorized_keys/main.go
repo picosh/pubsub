@@ -58,7 +58,7 @@ func PubSubMiddleware(broker pubsub.PubSub, logger *slog.Logger) wish.Middleware
 
 				clientID := uuid.NewString()
 
-				err := errors.Join(broker.Sub(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "keepalive"))
+				err := errors.Join(broker.Sub(sesh.Context(), clientID, sesh, chans, strings.ToLower(args[len(args)-1]) == "keepalive"))
 				if err != nil {
 					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
@@ -71,7 +71,7 @@ func PubSubMiddleware(broker pubsub.PubSub, logger *slog.Logger) wish.Middleware
 
 				clientID := uuid.NewString()
 
-				err := errors.Join(broker.Pub(sesh.Context(), clientID, sesh, chans))
+				err := errors.Join(broker.Pub(sesh.Context(), clientID, sesh, chans, strings.ToLower(args[len(args)-1]) == "blockwrite"))
 				if err != nil {
 					logger.Error("error during pub", slog.Any("error", err), slog.String("client", clientID))
 				}
@@ -84,7 +84,7 @@ func PubSubMiddleware(broker pubsub.PubSub, logger *slog.Logger) wish.Middleware
 
 				clientID := uuid.NewString()
 
-				err := errors.Join(broker.Pipe(sesh.Context(), clientID, sesh, chans, args[len(args)-1] == "replay"))
+				err := errors.Join(broker.Pipe(sesh.Context(), clientID, sesh, chans, strings.ToLower(args[len(args)-1]) == "replay"))
 				if err != nil {
 					logger.Error(
 						"pipe error",
