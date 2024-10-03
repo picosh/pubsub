@@ -10,8 +10,10 @@ import (
 PubSub is our take on a basic publisher and subscriber interface.
 
 It has a few notable requirements:
-- each operation must accept an array of channels
-- some way to send, receive, and stream data between clients
+- Each operation must accept an array of channels
+- A way to send, receive, and stream data between clients
+
+PubSub also inherits the properties of a Broker.
 */
 type PubSub interface {
 	Broker
