@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"iter"
-	"log/slog"
 )
 
 type PubSub interface {
@@ -15,9 +14,4 @@ type PubSub interface {
 	Pipe(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, replay bool) (error, error)
 	Sub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, keepAlive bool) error
 	Pub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel) error
-}
-
-type Cfg struct {
-	Logger *slog.Logger
-	PubSub PubSub
 }
