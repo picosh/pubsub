@@ -31,30 +31,30 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 		return func(sesh ssh.Session) {
 			args := sesh.Command()
 			if len(args) < 2 {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {topic}")
 				next(sesh)
 				return
 			}
 
 			cmd := strings.TrimSpace(args[0])
-			channel := args[1]
+			topicsRaw := args[1]
 
-			channels := strings.Split(channel, ",")
+			topics := strings.Split(topicsRaw, ",")
 
 			logger := cfg.Logger.With(
 				"cmd", cmd,
-				"channel", channels,
+				"topics", topics,
 			)
 
 			logger.Info("running cli")
 
 			if cmd == "help" {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {topic}")
 			} else if cmd == "sub" {
 				var chans []*pubsub.Channel
 
-				for _, c := range channels {
-					chans = append(chans, pubsub.NewChannel(c))
+				for _, topic := range topics {
+					chans = append(chans, pubsub.NewChannel(topic))
 				}
 
 				clientID := uuid.NewString()
@@ -66,8 +66,8 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 			} else if cmd == "pub" {
 				var chans []*pubsub.Channel
 
-				for _, c := range channels {
-					chans = append(chans, pubsub.NewChannel(c))
+				for _, topic := range topics {
+					chans = append(chans, pubsub.NewChannel(topic))
 				}
 
 				clientID := uuid.NewString()
@@ -79,8 +79,8 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 			} else if cmd == "pipe" {
 				var chans []*pubsub.Channel
 
-				for _, c := range channels {
-					chans = append(chans, pubsub.NewChannel(c))
+				for _, topics := range topics {
+					chans = append(chans, pubsub.NewChannel(topics))
 				}
 
 				clientID := uuid.NewString()
@@ -94,7 +94,7 @@ func PubSubMiddleware(cfg *pubsub.Cfg) wish.Middleware {
 					)
 				}
 			} else {
-				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {channel}")
+				wish.Println(sesh, "USAGE: ssh send.pico.sh (sub|pub|pipe) {topic}")
 			}
 
 			next(sesh)
