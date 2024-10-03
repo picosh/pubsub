@@ -8,7 +8,7 @@ import (
 )
 
 type PubSub interface {
-	Connector
+	Broker
 	GetPubs() iter.Seq2[string, *Client]
 	GetSubs() iter.Seq2[string, *Client]
 	GetPipes() iter.Seq2[string, *Client]

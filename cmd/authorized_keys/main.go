@@ -109,12 +109,12 @@ func main() {
 	keyPath := GetEnv("SSH_AUTHORIZED_KEYS", "./ssh_data/authorized_keys")
 	cfg := &pubsub.Cfg{
 		Logger: logger,
-		PubSub: &pubsub.PubSubMulticast{
-			Logger: logger,
-			Connector: &pubsub.BaseConnector{
+		PubSub: pubsub.NewMulticast(
+			&pubsub.BaseBroker{
 				Channels: syncmap.New[string, *pubsub.Channel](),
 			},
-		},
+			logger,
+		),
 	}
 
 	s, err := wish.NewServer(
@@ -150,9 +150,9 @@ func main() {
 			select {
 			case <-time.After(5 * time.Second):
 				for _, channel := range cfg.PubSub.GetChannels() {
-					slog.Info("channel online", slog.Any("channel", channel.ID))
+					slog.Info("channel online", slog.Any("channel topic", channel.Topic))
 					for _, client := range channel.GetClients() {
-						slog.Info("client online", slog.Any("channel", channel.ID), slog.Any("client", client.ID), slog.String("direction", client.Direction.String()))
+						slog.Info("client online", slog.Any("channel topic", channel.Topic), slog.Any("client", client.ID), slog.String("direction", client.Direction.String()))
 					}
 				}
 			case <-done:

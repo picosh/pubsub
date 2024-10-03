@@ -37,9 +37,9 @@ type ChannelMessage struct {
 	Action    ChannelAction
 }
 
-func NewChannel(name string) *Channel {
+func NewChannel(topic string) *Channel {
 	return &Channel{
-		ID:      name,
+		Topic:   topic,
 		Done:    make(chan struct{}),
 		Data:    make(chan ChannelMessage),
 		Clients: syncmap.New[string, *Client](),
@@ -47,7 +47,7 @@ func NewChannel(name string) *Channel {
 }
 
 type Channel struct {
-	ID          string
+	Topic       string
 	Done        chan struct{}
 	Data        chan ChannelMessage
 	Clients     *syncmap.Map[string, *Client]
