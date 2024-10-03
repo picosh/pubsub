@@ -6,14 +6,25 @@ import (
 	"io"
 	"iter"
 	"log/slog"
+
+	"github.com/antoniomika/syncmap"
 )
 
-type PubSubMulticast struct {
-	Connector
+type Multicast struct {
+	Broker
 	Logger *slog.Logger
 }
 
-func (p *PubSubMulticast) getClients(direction ChannelDirection) iter.Seq2[string, *Client] {
+func NewMulticast(logger *slog.Logger) *Multicast {
+	return &Multicast{
+		Logger: logger,
+		Broker: &BaseBroker{
+			Channels: syncmap.New[string, *Channel](),
+		},
+	}
+}
+
+func (p *Multicast) getClients(direction ChannelDirection) iter.Seq2[string, *Client] {
 	return func(yield func(string, *Client) bool) {
 		for clientID, client := range p.GetClients() {
 			if client.Direction == direction {
@@ -23,19 +34,19 @@ func (p *PubSubMulticast) getClients(direction ChannelDirection) iter.Seq2[strin
 	}
 }
 
-func (p *PubSubMulticast) GetPipes() iter.Seq2[string, *Client] {
+func (p *Multicast) GetPipes() iter.Seq2[string, *Client] {
 	return p.getClients(ChannelDirectionInputOutput)
 }
 
-func (p *PubSubMulticast) GetPubs() iter.Seq2[string, *Client] {
+func (p *Multicast) GetPubs() iter.Seq2[string, *Client] {
 	return p.getClients(ChannelDirectionInput)
 }
 
-func (p *PubSubMulticast) GetSubs() iter.Seq2[string, *Client] {
+func (p *Multicast) GetSubs() iter.Seq2[string, *Client] {
 	return p.getClients(ChannelDirectionOutput)
 }
 
-func (p *PubSubMulticast) connect(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, direction ChannelDirection, blockWrite bool, replay, keepAlive bool) (error, error) {
+func (p *Multicast) connect(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, direction ChannelDirection, blockWrite bool, replay, keepAlive bool) (error, error) {
 	client := NewClient(ID, rw, direction, blockWrite, replay, keepAlive)
 
 	go func() {
@@ -46,16 +57,16 @@ func (p *PubSubMulticast) connect(ctx context.Context, ID string, rw io.ReadWrit
 	return p.Connect(client, channels)
 }
 
-func (p *PubSubMulticast) Pipe(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, replay bool) (error, error) {
+func (p *Multicast) Pipe(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, replay bool) (error, error) {
 	return p.connect(ctx, ID, rw, channels, ChannelDirectionInputOutput, false, replay, false)
 }
 
-func (p *PubSubMulticast) Pub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel) error {
+func (p *Multicast) Pub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel) error {
 	return errors.Join(p.connect(ctx, ID, rw, channels, ChannelDirectionInput, true, false, false))
 }
 
-func (p *PubSubMulticast) Sub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, keepAlive bool) error {
+func (p *Multicast) Sub(ctx context.Context, ID string, rw io.ReadWriter, channels []*Channel, keepAlive bool) error {
 	return errors.Join(p.connect(ctx, ID, rw, channels, ChannelDirectionOutput, false, false, keepAlive))
 }
 
-var _ PubSub = (*PubSubMulticast)(nil)
+var _ = (*Multicast)(nil)

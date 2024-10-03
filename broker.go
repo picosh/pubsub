@@ -10,17 +10,17 @@ import (
 	"github.com/antoniomika/syncmap"
 )
 
-type Connector interface {
+type Broker interface {
 	GetChannels() iter.Seq2[string, *Channel]
 	GetClients() iter.Seq2[string, *Client]
 	Connect(*Client, []*Channel) (error, error)
 }
 
-type BaseConnector struct {
+type BaseBroker struct {
 	Channels *syncmap.Map[string, *Channel]
 }
 
-func (b *BaseConnector) Cleanup() {
+func (b *BaseBroker) Cleanup() {
 	toRemove := []string{}
 	for _, channel := range b.GetChannels() {
 		count := 0
@@ -31,7 +31,7 @@ func (b *BaseConnector) Cleanup() {
 
 		if count == 0 {
 			channel.Cleanup()
-			toRemove = append(toRemove, channel.ID)
+			toRemove = append(toRemove, channel.Topic)
 		}
 	}
 
@@ -40,11 +40,11 @@ func (b *BaseConnector) Cleanup() {
 	}
 }
 
-func (b *BaseConnector) GetChannels() iter.Seq2[string, *Channel] {
+func (b *BaseBroker) GetChannels() iter.Seq2[string, *Channel] {
 	return b.Channels.Range
 }
 
-func (b *BaseConnector) GetClients() iter.Seq2[string, *Client] {
+func (b *BaseBroker) GetClients() iter.Seq2[string, *Client] {
 	return func(yield func(string, *Client) bool) {
 		for _, channel := range b.GetChannels() {
 			channel.Clients.Range(yield)
@@ -52,13 +52,13 @@ func (b *BaseConnector) GetClients() iter.Seq2[string, *Client] {
 	}
 }
 
-func (b *BaseConnector) Connect(client *Client, channels []*Channel) (error, error) {
+func (b *BaseBroker) Connect(client *Client, channels []*Channel) (error, error) {
 	for _, channel := range channels {
 		dataChannel := b.ensureChannel(channel)
 		dataChannel.Clients.Store(client.ID, client)
-		client.Channels.Store(dataChannel.ID, dataChannel)
+		client.Channels.Store(dataChannel.Topic, dataChannel)
 		defer func() {
-			client.Channels.Delete(channel.ID)
+			client.Channels.Delete(channel.Topic)
 			dataChannel.Clients.Delete(client.ID)
 
 			client.Cleanup()
@@ -186,10 +186,10 @@ func (b *BaseConnector) Connect(client *Client, channels []*Channel) (error, err
 	return inputErr, outputErr
 }
 
-func (b *BaseConnector) ensureChannel(channel *Channel) *Channel {
-	dataChannel, _ := b.Channels.LoadOrStore(channel.ID, channel)
+func (b *BaseBroker) ensureChannel(channel *Channel) *Channel {
+	dataChannel, _ := b.Channels.LoadOrStore(channel.Topic, channel)
 	dataChannel.Handle()
 	return dataChannel
 }
 
-var _ Connector = (*BaseConnector)(nil)
+var _ Broker = (*BaseBroker)(nil)
