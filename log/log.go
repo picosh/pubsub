@@ -339,24 +339,6 @@ func SendLogRegister(logger *slog.Logger, connectionInfo *PubSubConnectionInfo, 
 var _ io.Writer = (*PubSubLogWriter)(nil)
 var _ slog.Handler = (*MultiHandler)(nil)
 
-func AnyToStr(mp map[string]any, key string) string {
-	if value, ok := mp[key]; ok {
-		if value, ok := value.(string); ok {
-			return value
-		}
-	}
-	return ""
-}
-
-func AnyToFloat(mp map[string]any, key string) float64 {
-	if value, ok := mp[key]; ok {
-		if value, ok := value.(float64); ok {
-			return value
-		}
-	}
-	return 0
-}
-
 func ConnectToLogs(ctx context.Context, connectionInfo *PubSubConnectionInfo) (io.Reader, error) {
 	sshClient, err := CreateSSHClient(connectionInfo)
 	if err != nil {

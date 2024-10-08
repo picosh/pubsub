@@ -10,6 +10,16 @@ RUN --mount=type=cache,target=/go/pkg/,rw \
   --mount=type=cache,target=/root/.cache/,rw \
   go mod download
 
+WORKDIR /usr/src/app/cmd/example
+
+COPY ./cmd/example/go.* .
+
+RUN --mount=type=cache,target=/go/pkg/,rw \
+  --mount=type=cache,target=/root/.cache/,rw \
+  go mod download
+
+WORKDIR /usr/src/app
+
 COPY . .
 
 ARG TARGETOS
@@ -17,9 +27,11 @@ ARG TARGETARCH
 
 ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 
+WORKDIR /usr/src/app/cmd/example
+
 RUN --mount=type=cache,target=/go/pkg/,rw \
   --mount=type=cache,target=/root/.cache/,rw \
-  go build -o pubsub ./cmd/authorized_keys
+  go build -o /usr/src/app/pubsub ./
 
 FROM alpine
 

@@ -9,7 +9,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/cmd/authorized_keys/main.go",
+            "program": "${workspaceFolder}/cmd/example/main.go",
             "cwd": "${workspaceFolder}",
             "buildFlags": [
                 "-race"
