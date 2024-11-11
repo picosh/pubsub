@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
-	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/picosh/pubsub"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -83,14 +80,6 @@ func (m *MultiHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-type PubSubConnectionInfo struct {
-	RemoteHost     string
-	KeyLocation    string
-	KeyPassphrase  string
-	RemoteHostname string
-	RemoteUser     string
-}
-
 type PubSubLogWriter struct {
 	SSHClient        *ssh.Client
 	Session          *ssh.Session
@@ -103,7 +92,7 @@ type PubSubLogWriter struct {
 	closeMessageOnce sync.Once
 	startOnce        sync.Once
 	connecMu         sync.Mutex
-	ConnectionInfo   *PubSubConnectionInfo
+	ConnectionInfo   *pubsub.RemoteClientInfo
 }
 
 func (c *PubSubLogWriter) Close() error {
@@ -147,7 +136,7 @@ func (c *PubSubLogWriter) Open() error {
 	c.Done = make(chan struct{})
 	c.Messages = make(chan []byte, c.BufferSize)
 
-	sshClient, err := CreateSSHClient(c.ConnectionInfo)
+	sshClient, err := pubsub.CreateRemoteClient(c.ConnectionInfo)
 	if err != nil {
 		c.connecMu.Unlock()
 		return err
@@ -251,64 +240,7 @@ func (c *PubSubLogWriter) Reconnect() {
 	}()
 }
 
-func CreateSSHClient(connectionInfo *PubSubConnectionInfo) (*ssh.Client, error) {
-	if connectionInfo == nil {
-		return nil, fmt.Errorf("connection info is invalid")
-	}
-
-	if !strings.Contains(connectionInfo.RemoteHost, ":") {
-		connectionInfo.RemoteHost += ":22"
-	}
-
-	rawConn, err := net.Dial("tcp", connectionInfo.RemoteHost)
-	if err != nil {
-		return nil, err
-	}
-
-	keyPath, err := filepath.Abs(connectionInfo.KeyLocation)
-	if err != nil {
-		return nil, err
-	}
-
-	f, err := os.Open(keyPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-
-	var signer ssh.Signer
-
-	if connectionInfo.KeyPassphrase != "" {
-		signer, err = ssh.ParsePrivateKeyWithPassphrase(data, []byte(connectionInfo.KeyPassphrase))
-	} else {
-		signer, err = ssh.ParsePrivateKey(data)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	sshConn, chans, reqs, err := ssh.NewClientConn(rawConn, connectionInfo.RemoteHostname, &ssh.ClientConfig{
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		User:            connectionInfo.RemoteUser,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	sshClient := ssh.NewClient(sshConn, chans, reqs)
-
-	return sshClient, nil
-}
-
-func SendLogRegister(logger *slog.Logger, connectionInfo *PubSubConnectionInfo, buffer int) (*slog.Logger, error) {
+func SendLogRegister(logger *slog.Logger, connectionInfo *pubsub.RemoteClientInfo, buffer int) (*slog.Logger, error) {
 	if buffer < 0 {
 		buffer = 0
 	}
@@ -339,8 +271,8 @@ func SendLogRegister(logger *slog.Logger, connectionInfo *PubSubConnectionInfo, 
 var _ io.Writer = (*PubSubLogWriter)(nil)
 var _ slog.Handler = (*MultiHandler)(nil)
 
-func ConnectToLogs(ctx context.Context, connectionInfo *PubSubConnectionInfo) (io.Reader, error) {
-	sshClient, err := CreateSSHClient(connectionInfo)
+func ConnectToLogs(ctx context.Context, connectionInfo *pubsub.RemoteClientInfo) (io.Reader, error) {
+	sshClient, err := pubsub.CreateRemoteClient(connectionInfo)
 	if err != nil {
 		return nil, err
 	}

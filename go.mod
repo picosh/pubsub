@@ -4,6 +4,7 @@ go 1.23.1
 
 require (
 	github.com/antoniomika/syncmap v1.0.0
+	github.com/google/uuid v1.6.0
 	golang.org/x/crypto v0.28.0
 )
 
