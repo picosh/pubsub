@@ -3,21 +3,20 @@ package log
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"slices"
 	"sync"
-	"time"
 
 	"github.com/picosh/pubsub"
-	"golang.org/x/crypto/ssh"
 )
 
 type MultiHandler struct {
 	Handlers []slog.Handler
 	mu       sync.Mutex
 }
+
+var _ slog.Handler = (*MultiHandler)(nil)
 
 func (m *MultiHandler) Enabled(ctx context.Context, l slog.Level) bool {
 	m.mu.Lock()
@@ -80,181 +79,15 @@ func (m *MultiHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-type PubSubLogWriter struct {
-	SSHClient        *ssh.Client
-	Session          *ssh.Session
-	StdinPipe        io.WriteCloser
-	Done             chan struct{}
-	Messages         chan []byte
-	Timeout          time.Duration
-	BufferSize       int
-	closeOnce        sync.Once
-	closeMessageOnce sync.Once
-	startOnce        sync.Once
-	connecMu         sync.Mutex
-	ConnectionInfo   *pubsub.RemoteClientInfo
-}
-
-func (c *PubSubLogWriter) Close() error {
-	c.connecMu.Lock()
-	defer c.connecMu.Unlock()
-
-	if c.Done != nil {
-		c.closeOnce.Do(func() {
-			close(c.Done)
-		})
-	}
-
-	if c.Messages != nil {
-		c.closeMessageOnce.Do(func() {
-			close(c.Messages)
-		})
-	}
-
-	var errs []error
-
-	if c.StdinPipe != nil {
-		errs = append(errs, c.StdinPipe.Close())
-	}
-
-	if c.Session != nil {
-		errs = append(errs, c.Session.Close())
-	}
-
-	if c.SSHClient != nil {
-		errs = append(errs, c.SSHClient.Close())
-	}
-
-	return errors.Join(errs...)
-}
-
-func (c *PubSubLogWriter) Open() error {
-	c.Close()
-
-	c.connecMu.Lock()
-
-	c.Done = make(chan struct{})
-	c.Messages = make(chan []byte, c.BufferSize)
-
-	sshClient, err := pubsub.CreateRemoteClient(c.ConnectionInfo)
-	if err != nil {
-		c.connecMu.Unlock()
-		return err
-	}
-
-	session, err := sshClient.NewSession()
-	if err != nil {
-		c.connecMu.Unlock()
-		return err
-	}
-
-	stdinPipe, err := session.StdinPipe()
-	if err != nil {
-		c.connecMu.Unlock()
-		return err
-	}
-
-	err = session.Start("pub log-drain -b=false")
-	if err != nil {
-		c.connecMu.Unlock()
-		return err
-	}
-
-	c.SSHClient = sshClient
-	c.Session = session
-	c.StdinPipe = stdinPipe
-
-	c.closeOnce = sync.Once{}
-	c.startOnce = sync.Once{}
-
-	c.connecMu.Unlock()
-
-	c.Start()
-
-	return nil
-}
-
-func (c *PubSubLogWriter) Start() {
-	c.startOnce.Do(func() {
-		go func() {
-			defer c.Reconnect()
-
-			for {
-				select {
-				case data, ok := <-c.Messages:
-					_, err := c.StdinPipe.Write(data)
-					if !ok || err != nil {
-						slog.Error("received error on write, reopening logger", "error", err)
-						return
-					}
-				case <-c.Done:
-					return
-				}
-			}
-		}()
-	})
-}
-
-func (c *PubSubLogWriter) Write(data []byte) (int, error) {
-	var (
-		n   int
-		err error
-	)
-
-	ok := c.connecMu.TryLock()
-
-	if !ok {
-		return n, fmt.Errorf("unable to acquire lock to write")
-	}
-
-	defer c.connecMu.Unlock()
-
-	if c.Messages == nil || c.Done == nil {
-		return n, fmt.Errorf("logger not viable")
-	}
-
-	select {
-	case c.Messages <- slices.Clone(data):
-		n = len(data)
-	case <-time.After(c.Timeout):
-		err = fmt.Errorf("unable to send data within timeout")
-	case <-c.Done:
-		break
-	}
-
-	return n, err
-}
-
-func (c *PubSubLogWriter) Reconnect() {
-	go func() {
-		for {
-			err := c.Open()
-			if err != nil {
-				slog.Error("unable to open send logger. retrying in 10 seconds", "error", err)
-			} else {
-				return
-			}
-
-			<-time.After(10 * time.Second)
-		}
-	}()
-}
-
-func SendLogRegister(logger *slog.Logger, connectionInfo *pubsub.RemoteClientInfo, buffer int) (*slog.Logger, error) {
+func SendLogRegister(logger *slog.Logger, info *pubsub.RemoteClientInfo, buffer int) (*slog.Logger, error) {
 	if buffer < 0 {
 		buffer = 0
 	}
 
+	logWriter := pubsub.NewRemoteClientWriter(info, logger, buffer)
+	go logWriter.KeepAlive("pub log-drain -b=false")
+
 	currentHandler := logger.Handler()
-
-	logWriter := &PubSubLogWriter{
-		Timeout:        10 * time.Millisecond,
-		BufferSize:     buffer,
-		ConnectionInfo: connectionInfo,
-	}
-
-	logWriter.Reconnect()
-
 	return slog.New(
 		&MultiHandler{
 			Handlers: []slog.Handler{
@@ -267,9 +100,6 @@ func SendLogRegister(logger *slog.Logger, connectionInfo *pubsub.RemoteClientInf
 		},
 	), nil
 }
-
-var _ io.Writer = (*PubSubLogWriter)(nil)
-var _ slog.Handler = (*MultiHandler)(nil)
 
 func ConnectToLogs(ctx context.Context, connectionInfo *pubsub.RemoteClientInfo) (io.Reader, error) {
 	return pubsub.RemoteSub("sub log-drain -k", ctx, connectionInfo)
