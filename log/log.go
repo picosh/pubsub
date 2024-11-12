@@ -272,31 +272,5 @@ var _ io.Writer = (*PubSubLogWriter)(nil)
 var _ slog.Handler = (*MultiHandler)(nil)
 
 func ConnectToLogs(ctx context.Context, connectionInfo *pubsub.RemoteClientInfo) (io.Reader, error) {
-	sshClient, err := pubsub.CreateRemoteClient(connectionInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	session, err := sshClient.NewSession()
-	if err != nil {
-		return nil, err
-	}
-
-	stdoutPipe, err := session.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	err = session.Start("sub log-drain -k")
-	if err != nil {
-		return nil, err
-	}
-
-	go func() {
-		<-ctx.Done()
-		session.Close()
-		sshClient.Close()
-	}()
-
-	return stdoutPipe, nil
+	return pubsub.RemoteSub("sub log-drain -k", ctx, connectionInfo)
 }
