@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/google/uuid"
 	"github.com/picosh/pubsub"
 )
 
@@ -26,13 +25,11 @@ func main() {
 
 	go func() {
 		writer := bytes.NewBufferString("my data")
-		pubID := uuid.NewString()
-		broker.Pub(ctx, pubID, writer, chann, false)
+		_ = broker.Pub(ctx, "pubID", writer, chann, false)
 	}()
 
 	reader := bytes.NewBufferString("")
-	subID := uuid.NewString()
-	broker.Sub(ctx, subID, reader, chann, false)
+	_ = broker.Sub(ctx, "subID", reader, chann, false)
 
 	// result
 	fmt.Println("data from pub:", reader)
