@@ -145,7 +145,6 @@ func (c *RemoteClientWriter) start() {
 }
 
 func (c *RemoteClientWriter) Write(data []byte) (int, error) {
-	c.Logger.Info("writing to ssh conn", "host", c.Info.RemoteHost)
 	var (
 		n   int
 		err error
