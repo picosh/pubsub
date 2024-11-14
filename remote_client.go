@@ -45,6 +45,7 @@ func NewRemoteClientWriter(info *RemoteClientInfo, logger *slog.Logger, buffer i
 }
 
 func (c *RemoteClientWriter) Close() error {
+	c.Logger.Info("closing ssh conn", "host", c.Info.RemoteHost)
 	c.connecMu.Lock()
 	defer c.connecMu.Unlock()
 
@@ -85,6 +86,7 @@ func (c *RemoteClientWriter) Open(cmd string) error {
 	c.Done = make(chan struct{})
 	c.Messages = make(chan []byte, c.BufferSize)
 
+	c.Logger.Info("connecting to ssh conn", "host", c.Info.RemoteHost, "cmd", cmd)
 	sshClient, err := CreateRemoteClient(c.Info)
 	if err != nil {
 		c.connecMu.Unlock()
@@ -143,6 +145,7 @@ func (c *RemoteClientWriter) start() {
 }
 
 func (c *RemoteClientWriter) Write(data []byte) (int, error) {
+	c.Logger.Info("writing to ssh conn", "host", c.Info.RemoteHost)
 	var (
 		n   int
 		err error
