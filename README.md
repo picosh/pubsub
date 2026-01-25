@@ -1,5 +1,8 @@
 # pubsub
 
+> ![IMPORTANT]\
+> Code has moved to picosh/pico/pkg/pubsub
+
 A generic pubsub implementation for Go.
 
 ```go
